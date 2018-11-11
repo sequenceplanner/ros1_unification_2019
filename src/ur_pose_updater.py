@@ -5,18 +5,19 @@
 #----------------------------------------------------------------------------------------
     # Endre Eres
     # UR Pose Updater (update currently only for joint poses)
-    # V.0.3.0.
+    # V.0.4.0.
 #----------------------------------------------------------------------------------------
 
 import rospy
 import roslib
+import rospkg
 import sys
 import os
 import csv
 from moveit_commander import MoveGroupCommander as mgc
 from moveit_commander import roscpp_initialize, roscpp_shutdown
 from ros1_unification_2019.msg import UpdaterSPToUni
-from ros1_unification_2019.msg import UpdaterUniTOSP
+from ros1_unification_2019.msg import UpdaterUniToSP
 
 class ur_pose_updater():
 
@@ -27,12 +28,14 @@ class ur_pose_updater():
         self.robot = mgc("manipulator")
       
         rospy.Subscriber("/unification_roscontrol/updater_sp_to_uni", UpdaterSPToUni, self.sp_callback)
-        self.pose_lists_publisher = rospy.Publisher("unification_roscontrol/updater_uni_to_sp", UpdaterUniTOSP, queue_size=10)
+        self.pose_lists_publisher = rospy.Publisher("unification_roscontrol/updater_uni_to_sp", UpdaterUniToSP, queue_size=10)
 
-        self.file_joint_input = 'ur_joint_poses.csv'
-        self.file_tcp_input = 'ur_tcp_poses.csv'
-        self.file_oldpose = '_oldpose.csv'
-        self.file_newpose = '_newpose.csv'
+        self.rospack = rospkg.RosPack()
+
+        self.file_joint_input = self.rospack.get_path('ros1_unification_2019') + '/pose_lists/ur_joint_poses.csv'
+        self.file_tcp_input = self.rospack.get_path('ros1_unification_2019') + '/pose_lists/ur_tcp_poses.csv'
+        self.file_oldpose = self.rospack.get_path('ros1_unification_2019') + '/pose_lists/_oldpose.csv'
+        self.file_newpose = self.rospack.get_path('ros1_unification_2019') + '/pose_lists/_newpose.csv'
         self.pose_name = ''
         self.prev_pose_name = ''
         self.pose_type = ''
@@ -46,9 +49,11 @@ class ur_pose_updater():
 
     def main(self):
 
-        current_pose = UpdaterUniTOSP()
+        current_pose = UpdaterUniToSP()
 
         while not rospy.is_shutdown():
+            self.read_and_publish_joint_list()
+            self.read_and_publish_tcp_list()
             current_pose.joint_pose_list = self.jpl
             current_pose.tcp_pose_list = self.tpl
             self.pose_lists_publisher.publish(current_pose)
@@ -60,7 +65,7 @@ class ur_pose_updater():
 
     def read_and_publish_joint_list(self):
         joint_pose_list = []
-        with open(self.file_joint_input, 'a') as f_in:
+        with open(self.file_joint_input, 'r') as f_in:
             csv_input = csv.reader(f_in, delimiter=':')
             for row in csv_input:
                 joint_pose_list.append(row[0])
@@ -69,7 +74,7 @@ class ur_pose_updater():
 
     def read_and_publish_tcp_list(self):
         tcp_pose_list = []
-        with open(self.file_tcp_input, 'a') as f_in:
+        with open(self.file_tcp_input, 'r') as f_in:
             csv_input = csv.reader(f_in, delimiter=':')
             for row in csv_input:
                 tcp_pose_list.append(row[0])
