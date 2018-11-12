@@ -52,6 +52,10 @@ add_message_files(
   FILES
   UpdaterUniToSP.msg
   UpdaterSPToUni.msg
+  MoveItUniToSP.msg
+  MoveItSPToUni.msg
+  RobotiqUniToSP.msg
+  RobotiqSPToUni.msg
 )
 
 ## Generate services in the 'srv' folder

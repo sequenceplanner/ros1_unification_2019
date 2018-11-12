@@ -5,12 +5,13 @@
 #----------------------------------------------------------------------------------------
     # Endre Eres
     # UR MoveIt Unification Driver
-    # V.0.3.0.
+    # V.0.5.0.
 #----------------------------------------------------------------------------------------
 
 import rospy
 import roslib
 import socket
+import rospkg
 import numpy
 import ast
 import sys
@@ -38,8 +39,10 @@ class ur_moveit_unidriver():
         rospy.Subscriber("/unification_roscontrol/ur_moveit_sp_to_unidriver", MoveItSPToUni, self.sp_callback)
         self.to_sp_publisher = rospy.Publisher("/unification_roscontrol/ur_moveit_unidriver_to_sp", MoveItUniToSP, queue_size=10)
 
-        self.joint_pose_file = 'ur_joint_poses.csv'
-        self.tcp_pose_file = 'ur_tcp_poses.csv'
+        self.rospack = rospkg.RosPack()
+
+        self.joint_pose_file = self.rospack.get_path('ros1_unification_2019') + '/pose_lists/ur_joint_poses.csv'
+        self.tcp_pose_file = self.rospack.get_path('ros1_unification_2019') + '/pose_lists/ur_tcp_poses.csv'
         
         # command
         self.robot_type = ""
@@ -63,6 +66,7 @@ class ur_moveit_unidriver():
         self.got_acc_scaling = 0
         self.got_velocity_scaling = 0
         self.got_goal_tolerance = 0.001
+        self.actl = [0, 0, 0, 0, 0, 0, 0]
         self.act_pos = ""
         self.joint_isclose_tolerance = 0.01
         self.tcp_isclose_tolerance = 0.01
@@ -82,13 +86,21 @@ class ur_moveit_unidriver():
         self.pub_msg = MoveItUniToSP()    
 
         while not rospy.is_shutdown():
+
+            self.act_pose_quat = self.robot.get_current_pose("tool0_controller")
+            self.actl[0] = self.act_pose_quat.pose.position.x 
+            self.actl[1] = self.act_pose_quat.pose.position.y 
+            self.actl[2] = self.act_pose_quat.pose.position.z 
+            self.actl[3] = self.act_pose_quat.pose.orientation.x
+            self.actl[4] = self.act_pose_quat.pose.orientation.y
+            self.actl[5] = self.act_pose_quat.pose.orientation.z 
+            self.actl[6] = self.act_pose_quat.pose.orientation.w
             
             with open(self.tcp_pose_file, 'r') as tcp_csv:
                 tcp_csv_reader = csv.reader(tcp_csv, delimiter=':')
                 for row in tcp_csv_reader:
                     act_tcp_pos = ast.literal_eval(row[1])
-                    self.tcp_pose_list = self.robot.get_current_pose("tool0_controller")
-                    if all(numpy.isclose(self.tcp_pose_list[i], act_tcp_pos[i], atol=self.tcp_isclose_tolerance) for i in range(0, 6)):
+                    if all(numpy.isclose(self.actl[i], act_tcp_pos[i], atol=self.tcp_isclose_tolerance) for i in range(0, 6)):
                         self.act_tcp_pos = row[0]
                         break
                     else:
@@ -107,7 +119,7 @@ class ur_moveit_unidriver():
                         self.act_joint_pos = "unknown"
                         pass
 
-            if self.act_joint_pos = "unknown":
+            if self.act_joint_pos == "unknown":
                 self.act_pos = self.act_tcp_pos
             else:
                 self.act_pos = self.act_joint_pos
@@ -124,7 +136,7 @@ class ur_moveit_unidriver():
         joints = JointState()
         joints.name = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint', 'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
 
-        #tcp_pose = Pose()
+        tcp_pose = Pose()
 
         self.robot.set_max_velocity_scaling_factor(self.speed_scaling)
         self.robot.set_max_acceleration_scaling_factor(self.acc_scaling)
@@ -150,7 +162,16 @@ class ur_moveit_unidriver():
                             for row in tcp_csv_reader:
                                 if row[0] == self.ref_pos:
                                     self.rpy_tcp_pose = ast.literal_eval(row[1])
-                                    self.robot.go(self.rpy_tcp_pose, wait = False    
+
+                                    tcp_pose.position.x = self.rpy_tcp_pose[0]
+                                    tcp_pose.position.y = self.rpy_tcp_pose[1]
+                                    tcp_pose.position.z = self.rpy_tcp_pose[2]
+                                    tcp_pose.orientation.x = self.rpy_tcp_pose[3]
+                                    tcp_pose.orientation.y = self.rpy_tcp_pose[4]
+                                    tcp_pose.orientation.z = self.rpy_tcp_pose[5] 
+                                    tcp_pose.orientation.w = self.rpy_tcp_pose[6]
+
+                                    self.robot.go(tcp_pose, wait = False)
                                 else:
                                     print("Err2: Demanded ur10 tcp pose " + self.ref_pos + " not defined, make sure that the pose is defined in the 'ur_tcp_poses.csv' file.")
                                     pass

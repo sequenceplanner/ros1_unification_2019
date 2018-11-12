@@ -1,0 +1,11 @@
+bool ur_moveit_unidriver_got_msg_from_sp
+string got_robot_type
+string got_move_type
+string got_frame
+float32 got_speed_scaling
+float32 got_acc_scaling
+bool got_should_plan
+float32 got_goal_tolerance
+string got_ref_pos
+string act_pos
+

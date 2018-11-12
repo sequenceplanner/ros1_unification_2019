@@ -5,7 +5,7 @@
 #----------------------------------------------------------------------------------------
     # Endre Eres
     # UR Pose Updater (update currently only for joint poses)
-    # V.0.4.0.
+    # V.0.5.0.
 #----------------------------------------------------------------------------------------
 
 import rospy
@@ -34,11 +34,14 @@ class ur_pose_updater():
 
         self.file_joint_input = self.rospack.get_path('ros1_unification_2019') + '/pose_lists/ur_joint_poses.csv'
         self.file_tcp_input = self.rospack.get_path('ros1_unification_2019') + '/pose_lists/ur_tcp_poses.csv'
-        self.file_oldpose = self.rospack.get_path('ros1_unification_2019') + '/pose_lists/_oldpose.csv'
-        self.file_newpose = self.rospack.get_path('ros1_unification_2019') + '/pose_lists/_newpose.csv'
+        self.file_joint_oldpose = self.rospack.get_path('ros1_unification_2019') + '/pose_lists/_joint_oldpose.csv'
+        self.file_joint_newpose = self.rospack.get_path('ros1_unification_2019') + '/pose_lists/_joint_newpose.csv'
+        self.file_tcp_oldpose = self.rospack.get_path('ros1_unification_2019') + '/pose_lists/_tcp_oldpose.csv'
+        self.file_tcp_newpose = self.rospack.get_path('ros1_unification_2019') + '/pose_lists/_tcp_newpose.csv'
         self.pose_name = ''
         self.prev_pose_name = ''
         self.pose_type = ''
+        self.actl = [0, 0, 0, 0, 0, 0, 0]
         
         self.rate = rospy.Rate(10)
        
@@ -81,8 +84,8 @@ class ur_pose_updater():
             self.tpl = tcp_pose_list
 
 
-    def update_split(self, name, pose):
-        with open(self.file_input, "rb") as f_in, open(self.file_oldpose, "wb") as f_op, open(self.file_newpose, "wb") as f_np:
+    def update_joint_split(self, name, pose):
+        with open(self.file_joint_input, "rb") as f_in, open(self.file_joint_oldpose, "wb") as f_op, open(self.file_joint_newpose, "wb") as f_np:
             csv_input = csv.reader(f_in, delimiter=':')
             for row in csv_input:
                 if row[0] == name:
@@ -90,23 +93,53 @@ class ur_pose_updater():
                 else:
                     csv.writer(f_op, delimiter = ':').writerow([row[0], row[1]])
 
-        self.update_merge()
+        self.update_joint_merge()
+    
+
+    def update_tcp_split(self, name, pose):
+        with open(self.file_tcp_input, "rb") as f_in, open(self.file_tcp_oldpose, "wb") as f_op, open(self.file_tcp_newpose, "wb") as f_np:
+            csv_input = csv.reader(f_in, delimiter=':')
+            for row in csv_input:
+                if row[0] == name:
+                    csv.writer(f_np, delimiter = ':').writerow([name, pose])
+                else:
+                    csv.writer(f_op, delimiter = ':').writerow([row[0], row[1]])
+
+        self.update_tcp_merge()
             
 
-    def update_merge(self):
-        with open(self.file_newpose, "r") as f_np:
+    def update_joint_merge(self):
+        with open(self.file_joint_newpose, "r") as f_np:
             csv_input = csv.reader(f_np, delimiter=':')
             for row in csv_input:
-                with open(self.file_oldpose, "a") as f_op:
+                with open(self.file_joint_oldpose, "a") as f_op:
                     csv.writer(f_op, delimiter = ':').writerow([row[0], row[1]])
         
-        os.remove(self.file_input)
-        os.remove(self.file_newpose)
-        os.rename(self.file_oldpose, self.file_input)
+        os.remove(self.file_joint_input)
+        os.remove(self.file_joint_newpose)
+        os.rename(self.file_joint_oldpose, self.file_joint_input)
+
+    
+    def update_tcp_merge(self):
+        with open(self.file_tcp_newpose, "r") as f_np:
+            csv_input = csv.reader(f_np, delimiter=':')
+            for row in csv_input:
+                with open(self.file_tcp_oldpose, "a") as f_op:
+                    csv.writer(f_op, delimiter = ':').writerow([row[0], row[1]])
+        
+        os.remove(self.file_tcp_input)
+        os.remove(self.file_tcp_newpose)
+        os.rename(self.file_tcp_oldpose, self.file_tcp_input)
 
 
-    def append_new_pose(self, name, pose):
+    def append_new_joint_pose(self, name, pose):
         with open(self.file_joint_input, 'a') as joint_csv_write:
+            joint_csv_writer = csv.writer(joint_csv_write, delimiter=':')
+            joint_csv_writer.writerow([name, pose])
+    
+    
+    def append_new_tcp_pose(self, name, pose):
+        with open(self.file_tcp_input, 'a') as joint_csv_write:
             joint_csv_writer = csv.writer(joint_csv_write, delimiter=':')
             joint_csv_writer.writerow([name, pose])
         
@@ -115,21 +148,47 @@ class ur_pose_updater():
         self.pose_type = data.pose_type
         self.pose_name = data.pose_name
 
+        print(self.pose_name)
+
         if self.pose_name == "reset":
             self.prev_pose_name = "reset"
         else:
             pass
-        
-        if self.pose_name != self.prev_pose_name:
-            with open(self.file_joint_input, 'r') as joint_csv_read:
-                joint_csv_reader = csv.reader(joint_csv_read, delimiter=':')
-                if all((row[0] != self.pose_name) for row in joint_csv_reader):
-                    self.append_new_pose(self.pose_name, self.robot.get_current_joint_values())
-                else:
-                    self.update_split(self.pose_name, self.robot.get_current_joint_values())
 
-        else:
-            pass
+        if self.pose_type == "joint":
+            if self.pose_name != self.prev_pose_name:
+                with open(self.file_joint_input, 'r') as joint_csv_read:
+                    joint_csv_reader = csv.reader(joint_csv_read, delimiter=':')
+                    if all((row[0] != self.pose_name) for row in joint_csv_reader):
+                        self.append_new_joint_pose(self.pose_name, self.robot.get_current_joint_values())
+                    else:
+                        self.update_joint_split(self.pose_name, self.robot.get_current_joint_values())
+
+            else:
+                pass
+
+        elif self.pose_type == "tcp":
+            if self.pose_name != self.prev_pose_name:
+                with open(self.file_tcp_input, 'r') as tcp_csv_read:
+                    tcp_csv_reader = csv.reader(tcp_csv_read, delimiter=':')
+                    if all((row[0] != self.pose_name) for row in tcp_csv_reader):
+
+                        self.act_pose_quat = self.robot.get_current_pose("tool0_controller")
+                        self.actl[0] = self.act_pose_quat.pose.position.x 
+                        self.actl[1] = self.act_pose_quat.pose.position.y 
+                        self.actl[2] = self.act_pose_quat.pose.position.z 
+                        self.actl[3] = self.act_pose_quat.pose.orientation.x
+                        self.actl[4] = self.act_pose_quat.pose.orientation.y
+                        self.actl[5] = self.act_pose_quat.pose.orientation.z 
+                        self.actl[6] = self.act_pose_quat.pose.orientation.w
+
+                        self.append_new_tcp_pose(self.pose_name, self.actl)
+                    else:
+                        self.update_tcp_split(self.pose_name, self.actl)
+
+            else:
+                pass
+
 
 
 if __name__ == '__main__':
