@@ -5,30 +5,26 @@
 #----------------------------------------------------------------------------------------
     # Endre Eres
     # UR MoveIt Unification Driver
-    # V.0.5.0.
+    # V.0.6.0.
 #----------------------------------------------------------------------------------------
 
 import rospy
 import roslib
-import socket
 import rospkg
 import numpy
 import ast
 import sys
-import tf
 import time
 import csv
-import numpy
-from std_msgs.msg import String
-from geometry_msgs.msg import Pose
 from sensor_msgs.msg import JointState
 from moveit_commander import MoveGroupCommander as mgc
 from moveit_commander import roscpp_initialize, roscpp_shutdown
 from moveit_commander import RobotCommander as rbc
+from ur_transformations import ur_transformations as urtrans
 from ros1_unification_2019.msg import MoveItSPToUni
 from ros1_unification_2019.msg import MoveItUniToSP
 
-class ur_moveit_unidriver():
+class ur_moveit_unidriver(urtrans):
 
     def __init__(self):
 
@@ -54,7 +50,7 @@ class ur_moveit_unidriver():
         self.acc_scaling = 0
         self.velocity_scaling = 0
         self.goal_tolerance = 0.001
-        self.rpy_tcp_pose = []
+        self.quat_tcp_pose = []
 
         # state
         self.ur_moveit_unidriver_got_msg_from_sp = False
@@ -66,7 +62,7 @@ class ur_moveit_unidriver():
         self.got_acc_scaling = 0
         self.got_velocity_scaling = 0
         self.got_goal_tolerance = 0.001
-        self.actl = [0, 0, 0, 0, 0, 0, 0]
+        self.act_pose_rot = []
         self.act_pos = ""
         self.joint_isclose_tolerance = 0.01
         self.tcp_isclose_tolerance = 0.01
@@ -74,9 +70,9 @@ class ur_moveit_unidriver():
         self.rate = rospy.Rate(10)
        
         rospy.sleep(5)
-
+        
+        self.robot.set_pose_reference_frame("base")
         self.robot.set_end_effector_link("tool0_controller")
-        self.robot.set_pose_reference_frame("world")
 
         self.main()
 
@@ -87,20 +83,20 @@ class ur_moveit_unidriver():
 
         while not rospy.is_shutdown():
 
-            self.act_pose_quat = self.robot.get_current_pose("tool0_controller")
-            self.actl[0] = self.act_pose_quat.pose.position.x 
-            self.actl[1] = self.act_pose_quat.pose.position.y 
-            self.actl[2] = self.act_pose_quat.pose.position.z 
-            self.actl[3] = self.act_pose_quat.pose.orientation.x
-            self.actl[4] = self.act_pose_quat.pose.orientation.y
-            self.actl[5] = self.act_pose_quat.pose.orientation.z 
-            self.actl[6] = self.act_pose_quat.pose.orientation.w
+            act_pose_quat = self.robot.get_current_pose("tool0_controller")
+            act_pose_rot = self.quat_to_rot(act_pose_quat.pose.position.x, 
+                                            act_pose_quat.pose.position.y, 
+                                            act_pose_quat.pose.position.z, 
+                                            act_pose_quat.pose.orientation.x,
+                                            act_pose_quat.pose.orientation.y,
+                                            act_pose_quat.pose.orientation.z,
+                                            act_pose_quat.pose.orientation.w)
             
             with open(self.tcp_pose_file, 'r') as tcp_csv:
                 tcp_csv_reader = csv.reader(tcp_csv, delimiter=':')
                 for row in tcp_csv_reader:
                     act_tcp_pos = ast.literal_eval(row[1])
-                    if all(numpy.isclose(self.actl[i], act_tcp_pos[i], atol=self.tcp_isclose_tolerance) for i in range(0, 6)):
+                    if all(numpy.isclose(act_pose_rot[i], act_tcp_pos[i], atol=self.tcp_isclose_tolerance) for i in range(0, 5)):
                         self.act_tcp_pos = row[0]
                         break
                     else:
@@ -136,8 +132,6 @@ class ur_moveit_unidriver():
         joints = JointState()
         joints.name = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint', 'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
 
-        tcp_pose = Pose()
-
         self.robot.set_max_velocity_scaling_factor(self.speed_scaling)
         self.robot.set_max_acceleration_scaling_factor(self.acc_scaling)
         self.robot.set_goal_tolerance(self.goal_tolerance)
@@ -152,6 +146,7 @@ class ur_moveit_unidriver():
                                 if row[0] == self.ref_pos:
                                     joints.position = ast.literal_eval(row[1])
                                     self.robot.go(joints, wait = False)
+                                    rospy.sleep(1)
                                 else:
                                     print("Err1: Demanded ur10 joint pose " + self.ref_pos + " not defined, make sure that the pose is defined in the 'ur_joint_poses.csv' file.")
                                     pass
@@ -161,17 +156,9 @@ class ur_moveit_unidriver():
                             tcp_csv_reader = csv.reader(tcp_csv, delimiter=':')
                             for row in tcp_csv_reader:
                                 if row[0] == self.ref_pos:
-                                    self.rpy_tcp_pose = ast.literal_eval(row[1])
-
-                                    tcp_pose.position.x = self.rpy_tcp_pose[0]
-                                    tcp_pose.position.y = self.rpy_tcp_pose[1]
-                                    tcp_pose.position.z = self.rpy_tcp_pose[2]
-                                    tcp_pose.orientation.x = self.rpy_tcp_pose[3]
-                                    tcp_pose.orientation.y = self.rpy_tcp_pose[4]
-                                    tcp_pose.orientation.z = self.rpy_tcp_pose[5] 
-                                    tcp_pose.orientation.w = self.rpy_tcp_pose[6]
-
-                                    self.robot.go(tcp_pose, wait = False)
+                                    rot_tcp_pose = ast.literal_eval(row[1])
+                                    self.robot.go(rot_tcp_pose, wait = False)
+                                    rospy.sleep(1)
                                 else:
                                     print("Err2: Demanded ur10 tcp pose " + self.ref_pos + " not defined, make sure that the pose is defined in the 'ur_tcp_poses.csv' file.")
                                     pass
@@ -184,7 +171,6 @@ class ur_moveit_unidriver():
         else:
             print("Err5: Unknown robot.")
             pass
-
 
     def sp_callback(self, data):
 

@@ -5,7 +5,7 @@
 #----------------------------------------------------------------------------------------
     # Endre Eres
     # UR Pose Updater (update currently only for joint poses)
-    # V.0.5.0.
+    # V.0.6.0.
 #----------------------------------------------------------------------------------------
 
 import rospy
@@ -16,10 +16,11 @@ import os
 import csv
 from moveit_commander import MoveGroupCommander as mgc
 from moveit_commander import roscpp_initialize, roscpp_shutdown
+from ur_transformations import ur_transformations as urtrans
 from ros1_unification_2019.msg import UpdaterSPToUni
 from ros1_unification_2019.msg import UpdaterUniToSP
 
-class ur_pose_updater():
+class ur_pose_updater(urtrans):
 
     def __init__(self):
 
@@ -41,7 +42,6 @@ class ur_pose_updater():
         self.pose_name = ''
         self.prev_pose_name = ''
         self.pose_type = ''
-        self.actl = [0, 0, 0, 0, 0, 0, 0]
         
         self.rate = rospy.Rate(10)
        
@@ -173,22 +173,21 @@ class ur_pose_updater():
                     tcp_csv_reader = csv.reader(tcp_csv_read, delimiter=':')
                     if all((row[0] != self.pose_name) for row in tcp_csv_reader):
 
-                        self.act_pose_quat = self.robot.get_current_pose("tool0_controller")
-                        self.actl[0] = self.act_pose_quat.pose.position.x 
-                        self.actl[1] = self.act_pose_quat.pose.position.y 
-                        self.actl[2] = self.act_pose_quat.pose.position.z 
-                        self.actl[3] = self.act_pose_quat.pose.orientation.x
-                        self.actl[4] = self.act_pose_quat.pose.orientation.y
-                        self.actl[5] = self.act_pose_quat.pose.orientation.z 
-                        self.actl[6] = self.act_pose_quat.pose.orientation.w
-
-                        self.append_new_tcp_pose(self.pose_name, self.actl)
+                        act_pose_quat = self.robot.get_current_pose("tool0_controller")
+                        act_pose_rot = self.quat_to_rot(act_pose_quat.pose.position.x, 
+                                                        act_pose_quat.pose.position.y, 
+                                                        act_pose_quat.pose.position.z, 
+                                                        act_pose_quat.pose.orientation.x,
+                                                        act_pose_quat.pose.orientation.y,
+                                                        act_pose_quat.pose.orientation.z,
+                                                        act_pose_quat.pose.orientation.w)
+                     
+                        self.append_new_tcp_pose(self.pose_name, act_pose_rot)
                     else:
-                        self.update_tcp_split(self.pose_name, self.actl)
+                        self.update_tcp_split(self.pose_name, act_pose_rot)
 
             else:
                 pass
-
 
 
 if __name__ == '__main__':
