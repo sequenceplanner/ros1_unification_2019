@@ -86,7 +86,7 @@ class ur_moveit_unidriver(urtrans):
             
             act_pose_quat = self.robot.get_current_pose("tool0_controller")
             # p = self.robot.get_current_rpy("tool0_controller")
-            # Have to set y in the tool0 link in the urdf to -pi
+            # Have to set yaw in the tool0 link in the urdf to -pi
             act_pose_rot = self.quat_to_rot(act_pose_quat.pose.position.x, 
                                             act_pose_quat.pose.position.y, 
                                             act_pose_quat.pose.position.z, 
