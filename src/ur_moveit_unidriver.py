@@ -5,7 +5,7 @@
 #----------------------------------------------------------------------------------------
     # Endre Eres
     # UR MoveIt Unification Driver
-    # V.0.6.0.
+    # V.0.6.2.
 #----------------------------------------------------------------------------------------
 
 import rospy
@@ -85,8 +85,6 @@ class ur_moveit_unidriver(urtrans):
         while not rospy.is_shutdown():
             
             act_pose_quat = self.robot.get_current_pose("tool0_controller")
-            # p = self.robot.get_current_rpy("tool0_controller")
-            # Have to set yaw in the tool0 link in the urdf to -pi
             act_pose_rot = self.quat_to_rot(act_pose_quat.pose.position.x, 
                                             act_pose_quat.pose.position.y, 
                                             act_pose_quat.pose.position.z, 
@@ -94,9 +92,6 @@ class ur_moveit_unidriver(urtrans):
                                             act_pose_quat.pose.orientation.y,
                                             act_pose_quat.pose.orientation.z,
                                             act_pose_quat.pose.orientation.w)
-
-            #print(self.rpy_to_rot(act_pose_rot[0], act_pose_rot[1], act_pose_rot[2], p[0], p[1], p[2]))
-            #print(act_pose_rot)
             
             with open(self.tcp_pose_file, 'r') as tcp_csv:
                 tcp_csv_reader = csv.reader(tcp_csv, delimiter=':')
