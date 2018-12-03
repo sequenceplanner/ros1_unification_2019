@@ -39,9 +39,9 @@ class ur_transformations:
         ])
 
         pitchMatrix = numpy.matrix([
-        [math.cos(pitch), 0, math.sin(pitch)],
+        [math.cos(pitch), 0, -math.sin(pitch)],
         [0, 1, 0],
-        [-math.sin(pitch), 0, math.cos(pitch)]
+        [math.sin(pitch), 0, math.cos(pitch)]
         ])
 
         rollMatrix = numpy.matrix([

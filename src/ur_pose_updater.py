@@ -4,8 +4,8 @@
 # authors, description, version
 #----------------------------------------------------------------------------------------
     # Endre Eres
-    # UR Pose Updater (update currently only for joint poses)
-    # V.0.6.2.
+    # UR Pose Updater
+    # V.1.0.0.
 #----------------------------------------------------------------------------------------
 
 import rospy
@@ -16,11 +16,10 @@ import os
 import csv
 from moveit_commander import MoveGroupCommander as mgc
 from moveit_commander import roscpp_initialize, roscpp_shutdown
-from ur_transformations import ur_transformations as urtrans
 from ros1_unification_2019.msg import UpdaterSPToUni
 from ros1_unification_2019.msg import UpdaterUniToSP
 
-class ur_pose_updater(urtrans):
+class ur_pose_updater():
 
     def __init__(self):
 
@@ -42,6 +41,11 @@ class ur_pose_updater(urtrans):
         self.pose_name = ''
         self.prev_pose_name = ''
         self.pose_type = ''
+
+        self.action = ''
+        self.pose_type = ''
+        self.pose_name = ''
+        self.done_action = ''
         
         self.rate = rospy.Rate(10)
        
@@ -52,40 +56,71 @@ class ur_pose_updater(urtrans):
 
     def main(self):
 
-        current_pose = UpdaterUniToSP()
+        msg = UpdaterUniToSP()
 
         while not rospy.is_shutdown():
-            self.read_and_publish_joint_list()
-            self.read_and_publish_tcp_list()
-            current_pose.joint_pose_list = self.jpl
-            current_pose.tcp_pose_list = self.tpl
-            self.pose_lists_publisher.publish(current_pose)
+            msg.got_action = self.action
+            msg.got_pose_type = self.pose_type
+            msg.got_pose_name = self.pose_name
+            msg.done_action = self.done_action
+            msg.joint_pose_list = self.read_and_publish_pose_list(self.file_joint_input)
+            msg.tcp_pose_list = self.read_and_publish_pose_list(self.file_tcp_input)
+            self.pose_lists_publisher.publish(msg)
             self.rate.sleep()
             pass
         
         rospy.spin()
 
 
-    def read_and_publish_joint_list(self):
-        joint_pose_list = []
-        with open(self.file_joint_input, 'r') as f_in:
+    def pose_to_list(self, pose):
+        pose_list = [0, 0, 0, 0, 0, 0, 0]
+        pose_list[0] = pose.pose.position.x
+        pose_list[1] = pose.pose.position.y 
+        pose_list[2] = pose.pose.position.z 
+        pose_list[3] = pose.pose.orientation.x
+        pose_list[4] = pose.pose.orientation.y
+        pose_list[5] = pose.pose.orientation.z
+        pose_list[6] = pose.pose.orientation.w
+        return pose_list
+
+
+    def delete_pose(self, input_f, newpose_f, pose):
+        with open(input_f, "rb") as f_in, open(newpose_f, "wb") as f_np:
             csv_input = csv.reader(f_in, delimiter=':')
             for row in csv_input:
-                joint_pose_list.append(row[0])
-            self.jpl = joint_pose_list
+                if row[0] != pose:
+                    csv.writer(f_np, delimiter = ':').writerow(row)
+                else:
+                    pass
         
+        os.remove(input_f)
+        os.rename(newpose_f, input_f)
 
-    def read_and_publish_tcp_list(self):
-        tcp_pose_list = []
-        with open(self.file_tcp_input, 'r') as f_in:
+
+    def clear_pose_list(self, input_f, newpose_f):
+        with open(input_f, "rb") as f_in, open(newpose_f, "wb") as f_np:
             csv_input = csv.reader(f_in, delimiter=':')
             for row in csv_input:
-                tcp_pose_list.append(row[0])
-            self.tpl = tcp_pose_list
+                if row[0] == 'control_pose':
+                    csv.writer(f_np, delimiter = ':').writerow(row)
+                else:
+                    pass
+
+        os.remove(input_f)
+        os.rename(newpose_f, input_f)
+
+        
+    def read_and_publish_pose_list(self, input_f):
+        pose_list = []
+        with open(input_f, 'r') as f_in:
+            csv_input = csv.reader(f_in, delimiter=':')
+            for row in csv_input:
+                pose_list.append(row[0])
+            return pose_list
 
 
-    def update_joint_split(self, name, pose):
-        with open(self.file_joint_input, "rb") as f_in, open(self.file_joint_oldpose, "wb") as f_op, open(self.file_joint_newpose, "wb") as f_np:
+    def update_split(self, input_f, oldpose_f, newpose_f, name, pose):
+        with open(input_f, "rb") as f_in, open(oldpose_f, "wb") as f_op, open(newpose_f, "wb") as f_np:
             csv_input = csv.reader(f_in, delimiter=':')
             for row in csv_input:
                 if row[0] == name:
@@ -93,99 +128,85 @@ class ur_pose_updater(urtrans):
                 else:
                     csv.writer(f_op, delimiter = ':').writerow([row[0], row[1]])
 
-        self.update_joint_merge()
-    
+        self.update_merge(input_f, newpose_f, oldpose_f)
 
-    def update_tcp_split(self, name, pose):
-        with open(self.file_tcp_input, "rb") as f_in, open(self.file_tcp_oldpose, "wb") as f_op, open(self.file_tcp_newpose, "wb") as f_np:
-            csv_input = csv.reader(f_in, delimiter=':')
-            for row in csv_input:
-                if row[0] == name:
-                    csv.writer(f_np, delimiter = ':').writerow([name, pose])
-                else:
-                    csv.writer(f_op, delimiter = ':').writerow([row[0], row[1]])
 
-        self.update_tcp_merge()
-            
-
-    def update_joint_merge(self):
-        with open(self.file_joint_newpose, "r") as f_np:
+    def update_merge(self, input_f, newpose_f, oldpose_f):
+        with open(newpose_f, "r") as f_np:
             csv_input = csv.reader(f_np, delimiter=':')
             for row in csv_input:
-                with open(self.file_joint_oldpose, "a") as f_op:
+                with open(oldpose_f, "a") as f_op:
                     csv.writer(f_op, delimiter = ':').writerow([row[0], row[1]])
         
-        os.remove(self.file_joint_input)
-        os.remove(self.file_joint_newpose)
-        os.rename(self.file_joint_oldpose, self.file_joint_input)
-
-    
-    def update_tcp_merge(self):
-        with open(self.file_tcp_newpose, "r") as f_np:
-            csv_input = csv.reader(f_np, delimiter=':')
-            for row in csv_input:
-                with open(self.file_tcp_oldpose, "a") as f_op:
-                    csv.writer(f_op, delimiter = ':').writerow([row[0], row[1]])
-        
-        os.remove(self.file_tcp_input)
-        os.remove(self.file_tcp_newpose)
-        os.rename(self.file_tcp_oldpose, self.file_tcp_input)
+        os.remove(input_f)
+        os.remove(newpose_f)
+        os.rename(oldpose_f, input_f)
 
 
-    def append_new_joint_pose(self, name, pose):
-        with open(self.file_joint_input, 'a') as joint_csv_write:
-            joint_csv_writer = csv.writer(joint_csv_write, delimiter=':')
-            joint_csv_writer.writerow([name, pose])
-    
-    
-    def append_new_tcp_pose(self, name, pose):
-        with open(self.file_tcp_input, 'a') as joint_csv_write:
-            joint_csv_writer = csv.writer(joint_csv_write, delimiter=':')
-            joint_csv_writer.writerow([name, pose])
-        
-    
+    def append_new_pose(self, file, name, pose):
+        with open(file, 'a') as csv_append:
+            csv_appender = csv.writer(csv_append, delimiter=':')
+            csv_appender.writerow([name, pose])
+
+
     def sp_callback(self, data):
+        self.action = data.action
         self.pose_type = data.pose_type
         self.pose_name = data.pose_name
 
-        print(self.pose_name)
+        act_pose_list = [0, 0, 0, 0, 0, 0, 0]
 
         if self.pose_name == "reset":
             self.prev_pose_name = "reset"
         else:
             pass
 
-        if self.pose_type == "joint":
-            if self.pose_name != self.prev_pose_name:
-                with open(self.file_joint_input, 'r') as joint_csv_read:
-                    joint_csv_reader = csv.reader(joint_csv_read, delimiter=':')
-                    if all((row[0] != self.pose_name) for row in joint_csv_reader):
-                        self.append_new_joint_pose(self.pose_name, self.robot.get_current_joint_values())
+        pose_types = ['joint', 'tcp']
+        file_input = [self.file_joint_input, self.file_tcp_input]
+        file_oldpose = [self.file_joint_oldpose, self.file_tcp_oldpose]
+        file_newpose = [self.file_joint_newpose, self.file_tcp_newpose]
+        poser = [self.robot.get_current_joint_values(), self.pose_to_list(self.robot.get_current_pose("ee_link"))]
+
+        pose_case = self.switcher(self.pose_type, pose_types)
+
+        #this wouldn't make much sense, but is still possible...
+        #action_types = ['append', 'update', 'delete', 'clear']
+        #actioner = [self.append_new_pose(file_input[pose_case], self.pose_name, poser[pose_case]),
+        #            self.update_split(file_input[pose_case], file_oldpose[pose_case], file_newpose[pose_case], self.pose_name, poser[pose_case]),
+        #            self.delete_pose(file_input[pose_case], self.pose_name),
+        #            self.clear_pose_list(file_input[pose_case])]
+        #action_case = self.switcher(self.action, action_types)
+
+        if self.pose_name != self.prev_pose_name:
+            with open(file_input[pose_case], 'r') as csv_read:
+                csv_reader = csv.reader(csv_read, delimiter=':')
+                if self.action == 'update':
+                    if all((row[0] != self.pose_name) for row in csv_reader):
+                        self.append_new_pose(file_input[pose_case], self.pose_name, poser[pose_case])
+                        self.done_action = 'appended: ' + str(self.pose_name) + ' to ' + str(pose_types[pose_case]) + ' list.'
                     else:
-                        self.update_joint_split(self.pose_name, self.robot.get_current_joint_values())
+                        self.update_split(file_input[pose_case], file_oldpose[pose_case], file_newpose[pose_case], self.pose_name, poser[pose_case])
+                        self.done_action = 'updated: ' + str(self.pose_name) + ' in ' + str(pose_types[pose_case]) + ' list.'
 
-            else:
-                pass
+                elif self.action == 'delete':
+                    self.delete_pose(file_input[pose_case], file_newpose[pose_case], self.pose_name)
+                    self.done_action = 'deleted: ' + str(self.pose_name) + ' from ' + str(pose_types[pose_case]) + ' list.'
 
-        elif self.pose_type == "tcp":
-            if self.pose_name != self.prev_pose_name:
-                with open(self.file_tcp_input, 'r') as tcp_csv_read:
-                    tcp_csv_reader = csv.reader(tcp_csv_read, delimiter=':')
-                    if all((row[0] != self.pose_name) for row in tcp_csv_reader):
+                elif self.action == 'clear':
+                    self.clear_pose_list(file_input[pose_case], file_newpose[pose_case])
+                    self.done_action = 'cleared: ' + str(pose_types[pose_case]) + ' list.'
+                else:
+                    pass
 
-                        act_pose_quat = self.robot.get_current_pose("tool0_controller")
-                        act_pose_rot = self.quat_to_rot(act_pose_quat.pose.position.x, 
-                                                        act_pose_quat.pose.position.y, 
-                                                        act_pose_quat.pose.position.z, 
-                                                        act_pose_quat.pose.orientation.x,
-                                                        act_pose_quat.pose.orientation.y,
-                                                        act_pose_quat.pose.orientation.z,
-                                                        act_pose_quat.pose.orientation.w)
-                     
-                        self.append_new_tcp_pose(self.pose_name, act_pose_rot)
-                    else:
-                        self.update_tcp_split(self.pose_name, act_pose_rot)
+        else:
+            pass
 
+
+    def switcher(self, what, case_list):
+        for i in range(0, len(case_list), 1):
+            if what == case_list[i]:
+                return i
+                break
             else:
                 pass
 
