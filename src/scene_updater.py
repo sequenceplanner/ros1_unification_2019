@@ -14,6 +14,7 @@ import rospkg
 import sys
 import os
 import csv
+from moveit_commander import MoveGroupInterface as mgc
 from moveit_commander import PlanningSceneInterface as psi
 from moveit_commander import roscpp_initialize, roscpp_shutdown
 from transformations import transformations 
@@ -42,6 +43,8 @@ class ur_pose_updater(transformations):
         self.engine_mesh = self.rospack.get_path('ros1_unification_2019') + '/cad_meshes/engine_reduced.stl'
         self.agv_mesh = self.rospack.get_path('ros1_unification_2019') + '/cad_meshes/AGV.stl'
         self.ts_tool_mesh = self.rospack.get_path('ros1_unification_2019') + '/unstruct_ptcl_meshes/tstool.stl'
+
+        self.links = ['world', 'base_link', 'shoulder_link', 'elbow_link', 'wrist_1_link', 'wrist_2_link', 'wrist_3_link', 'tool0', 'ee_link']
 
         self.rate = rospy.Rate(10)
 
@@ -95,7 +98,7 @@ class ur_pose_updater(transformations):
     
     def object_poses(self):
         object_list = []
-        objects_in_scene = self.get_objects()
+        objects_in_scene = list(self.get_objects())
         for obj in objects_in_scene:
             self.obj_msg.object_name = obj
             self.obj_msg.object_pose = self.quat_to_rot(self.get_object_poses(obj))
@@ -104,11 +107,51 @@ class ur_pose_updater(transformations):
 
     
     def add_object(self, file, name, pose):
-        if name not in self.object_name_cases:
-            self.psi.add_mesh(name, pose, file, (1, 1, 1))
-            self.error == "none"
+        if name in self.object_name_cases:
+            self.scene.add_mesh(name, pose, file, (1, 1, 1))
+            self.error = "none"
+        elif name != '' and name not in self.object_name_cases:
+            self.error = "Object named: " + name + " not valid."
         else:
-            self.error == "Object: " + name + " not in valid. Add to object cases.")
+            pass
+
+
+    def remove_object(self, name):
+        if name in list(self.get_objects()):
+            self.scene.remove_world_object(name)
+            self.error = "none"
+        elif name != '' and name not in list(self.get_objects()) and name in self.object_name_cases:
+            self.error = "Object named: " + name + " not existing in the scene."
+        elif name != '' and name not in self.object_name_cases:
+            self.error = "Object named: " + name + " not valid."
+        else:
+            pass
+
+    
+    def move_object(self, file, name, pose):
+        self.remove_object(file, name)
+        self.add_object(file, name, pose)
+
+
+    def clear_scene(self):
+        self.remove_world_object()
+
+    
+    def attach_object(self, name, link):
+        if name in list(self.get_objects()) and link in self.links:
+            self.scene.attach_mesh(name, link)
+            self.error = "none"
+        elif name in list(self.get_objects()) and not link in self.links:
+            self.error = "Link named: " + link + " not valid."
+        elif name not in list(self.get_objects()):
+            self.error = "Object named: " + name + "not valid."
+        else:
+            pass
+
+    
+    def detach_object(self, name):
+        if name in list(self.get_attached_objects()):
+            self.scene.deta
     
     
     
@@ -122,23 +165,20 @@ class ur_pose_updater(transformations):
         else:
             pass
 
-        self.object_name_cases = ['lf', 'ts_tool', 'agv', 'engine']
+        self.object_name_cases = ['lf', 'ts_tool', 'agv', 'engine'] # Gradually add more...
         self.object_name_functions = [self.lf_mesh, self.ts_tool_mesh, self.agv_mesh, self.engine_mesh]
-        # advanced object_name_cases = ['lf', 'lf_tool', 'of', 'of_tool', 'ts_tool', 'agv', 'engine', 'mir', ... ]
-
-        self.object_name_switcher = self.switcher(self.object_name, object_name_cases)
-
-        self.object_action_cases = ['add', 'move', 'remove', 'attach', 'detach']
-        self.object_action_functions = [self.add_object(self.object_name, object_name_functions[object_name_switcher], self.euler_pose),
-                                   self.move_object(self.object_name, self.euler_pose),
-                                   self.remove_object(self.object_name),
-                                   self.attach_object(self.object_name, self.robot.get_end_effector_link(), self.object_name),
-                                   self.detach_object(self.object_name)]
-
-        self.object_action_switch = self.switcher(self.object_action, object_action_cases)
+        self.object_name_switcher = self.switcher(self.object_name, self.object_name_cases)
+        self.object_action_cases = ['add', 'remove', 'move', 'clear', 'attach', 'detach']
+        self.object_action_functions = [self.add_object(self.object_name, self.object_name_functions[self.object_name_switcher], self.euler_pose),
+                                        self.remove_object(self.object_name),
+                                        self.move_object(self.object_name, self.euler_pose),
+                                        self.clear_scene,
+                                        self.attach_object(self.object_name, self.robot.get_end_effector_link()),
+                                        self.detach_object(self.object_name)]
+        self.object_action_switcher = self.switcher(self.object_action, self.object_action_cases)
 
         if self.object_name != self.prev_object_name:
-            object_action_functions[object_action_switch]
+            self.object_action_functions[self.object_action_switch]
         else:
             pass
 
