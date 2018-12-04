@@ -8,4 +8,5 @@ bool got_should_plan
 float32 got_goal_tolerance
 string got_ref_pos
 string act_pos
+string error
 

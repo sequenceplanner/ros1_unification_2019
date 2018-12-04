@@ -56,6 +56,9 @@ add_message_files(
   MoveItSPToUni.msg
   RobotiqUniToSP.msg
   RobotiqSPToUni.msg
+  SceneUpdaterSPToUni.msg
+  SceneUpdaterUniToSP.msg
+  PsiObjectPose.msg
 )
 
 ## Generate services in the 'srv' folder

@@ -4,8 +4,8 @@
 # authors, description, version
 #----------------------------------------------------------------------------------------
     # Endre Eres
-    # Helper Class for UR Transformations
-    # V.0.2.0.
+    # Helper Class for Transformations
+    # V.0.3.0.
 #----------------------------------------------------------------------------------------
 
 import rospy
@@ -14,13 +14,13 @@ import numpy
 import math
 import tf
 
-class ur_transformations:
+class transformations:
 
     def quat_to_rpy(self, x, y, z, qx, qy, qz, qw):
         "returns euler rpy vector from quaternions"
-
-        quaternion = (qx, qy, qz, qw)
-        euler = tf.transformations.euler_from_quaternion(quaternion)
+	
+	quaternions = (qx, qy, qz, qw)
+        euler = tf.transformations.euler_from_quaternion(quaternions)
 
         roll = euler[0]
         pitch = euler[1]
@@ -28,6 +28,17 @@ class ur_transformations:
 
         return [x, y, z, roll, pitch, yaw]
 
+    def rpy_to_quat(self, x, y, z, roll, pitch, yaw):
+	"returns quaternions from euler rpy vector"
+
+        quaternion = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
+
+	qx = quaternion[0]
+        qy = quaternion[1]
+        qz = quaternion[2]
+        qw = quaternion[3]
+
+        return [x, y, z, qx, qy, qz, qw]
 
     def rpy_to_rot(self, x, y, z, roll, pitch, yaw):
         "returns rotational vector from euler rpy"
