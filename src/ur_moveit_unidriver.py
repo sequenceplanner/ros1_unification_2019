@@ -221,6 +221,17 @@ class ur_moveit_unidriver(urtrans):
             self.prev_ref_pos = "reset"
         else:
             pass
+
+        self.robot_cases = ['ur10', 'iiwa7']
+        self.robot_case_file_identifier = [self.pose_files_ur, self.pose_files_iiwa]
+
+        self.frame_cases = ['local', 'global']
+        
+        self.pose_cases = ['joint', 'tcp']
+        self.pose_files_ur = [self.joint_pose_file, self.tcp_pose_file]
+        self.pose_files_iiwa = [self.file1, self.file2]
+        self.move_cases = ['linear_joint', 'linear_tcp', 'planned']
+
         
         if self.ref_pos != self.prev_ref_pos:
             self.prev_ref_pos = self.ref_pos

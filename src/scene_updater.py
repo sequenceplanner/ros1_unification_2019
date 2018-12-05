@@ -5,7 +5,7 @@
 #----------------------------------------------------------------------------------------
     # Endre Eres
     # Unification Scene Updater
-    # V.0.1.0.
+    # V.0.2.0.
 #----------------------------------------------------------------------------------------
 
 import rospy
@@ -74,22 +74,6 @@ class ur_pose_updater(transformations):
         rospy.spin()
 
 
-    def add_object(self, rpy, object_name, object_file, object_size):
-
-            quat = self.rpy_to_quat(rpy[0], rpy[1], rpy[2], rpy[3], rpy[4], rpy[5])
-
-            scene_pose.header.frame_id = "world"
-            scene_pose.pose.position.x = quat[0]
-            scene_pose.pose.position.y = quat[1]
-            scene_pose.pose.position.z = quat[2]
-            scene_pose.pose.orientation.x = quat[3]
-            scene_pose.pose.orientation.y = quat[4]
-            scene_pose.pose.orientation.z = quat[5]
-            scene_pose.pose.orientation.w = quat[6]
-
-            self.scene.add_mesh(object_name, scene_pose, object_file, object_size)
-
-
     def attached_objects(self):
         object_list = []
         object_list.append(self.psi.get_attached_objects())
@@ -108,7 +92,19 @@ class ur_pose_updater(transformations):
     
     def add_object(self, file, name, pose):
         if name in self.object_name_cases:
-            self.scene.add_mesh(name, pose, file, (1, 1, 1))
+
+            quat = self.rpy_to_quat(pose[0], pose[1], pose[2], pose[3], pose[4], pose[5])
+
+            scene_pose.header.frame_id = "world"
+            scene_pose.pose.position.x = quat[0]
+            scene_pose.pose.position.y = quat[1]
+            scene_pose.pose.position.z = quat[2]
+            scene_pose.pose.orientation.x = quat[3]
+            scene_pose.pose.orientation.y = quat[4]
+            scene_pose.pose.orientation.z = quat[5]
+            scene_pose.pose.orientation.w = quat[6]
+
+            self.scene.add_mesh(name, quat, file, (1, 1, 1))
             self.error = "none"
         elif name != '' and name not in self.object_name_cases:
             self.error = "Object named: " + name + " not valid."
@@ -129,17 +125,17 @@ class ur_pose_updater(transformations):
 
     
     def move_object(self, file, name, pose):
-        self.remove_object(file, name)
+        self.scene.remove_object(file, name)
         self.add_object(file, name, pose)
 
 
     def clear_scene(self):
-        self.remove_world_object()
+        self.scene.remove_world_object()
 
     
     def attach_object(self, name, link):
         if name in list(self.get_objects()) and link in self.links:
-            self.scene.attach_mesh(name, link)
+            self.robot.attach_object(name, link)
             self.error = "none"
         elif name in list(self.get_objects()) and not link in self.links:
             self.error = "Link named: " + link + " not valid."
@@ -151,8 +147,14 @@ class ur_pose_updater(transformations):
     
     def detach_object(self, name):
         if name in list(self.get_attached_objects()):
-            self.scene.deta
-    
+            self.robot.detach_object(name)
+            self.error = "none"
+        elif name not in list(self.get_attached_objects()) and name in self.get_objects():
+            self.error = "Object named: " + name + "not attached."
+        elif name not in self.get_objects():
+            self.error = "Object named: " + name + "not valid."
+        else:
+            pass
     
     
     def sp_callback(self, data):
