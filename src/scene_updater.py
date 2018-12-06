@@ -22,7 +22,7 @@ from ros1_unification_2019.msg import SceneUpdaterSPToUni
 from ros1_unification_2019.msg import SceneUpdaterUniToSP
 from ros1_unification_2019.msg import PsiObjectPose
 
-class ur_pose_updater(transformations):
+class scene_updater(transformations):
 
     def __init__(self):
 
