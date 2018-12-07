@@ -23,11 +23,11 @@ from sensor_msgs.msg import JointState
 from moveit_commander import MoveGroupCommander as mgc
 from moveit_commander import PlanningSceneInterface as psi
 from moveit_commander import roscpp_initialize, roscpp_shutdown
-from ur_transformations import ur_transformations as urtrans
+from transformations import transformations
 from ros1_unification_2019.msg import MoveItSPToUni
 from ros1_unification_2019.msg import MoveItUniToSP
 
-class ur_moveit_unidriver(urtrans):
+class ur_moveit_unidriver(transformations):
 
     def __init__(self):
 

@@ -6,4 +6,3 @@ float32 acc_scaling
 bool should_plan
 float32 goal_tolerance
 string ref_pos
-

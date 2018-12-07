@@ -50,8 +50,9 @@ find_package(catkin REQUIRED COMPONENTS
 ## Generate messages in the 'msg' folder
 add_message_files(
   FILES
-  UpdaterUniToSP.msg
-  UpdaterSPToUni.msg
+  Common.msg
+  PoseUpdaterUniToSP.msg
+  PoseUpdaterSPToUni.msg
   MoveItUniToSP.msg
   MoveItSPToUni.msg
   RobotiqUniToSP.msg
