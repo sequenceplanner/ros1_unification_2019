@@ -2,6 +2,7 @@ Common state
 string got_action
 string got_pose_type
 string got_pose_name
+string got_robot_type
+string got_robot_name
 string last_done_action
-string[] joint_pose_list
-string[] tcp_pose_list
+SavedPoses[] robot_poses

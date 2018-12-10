@@ -36,7 +36,7 @@ class scene_updater(transformations):
 
         # General initialisers:
         roscpp_initialize(sys.argv)
-        rospy.init_node('ur_pose_updater', anonymous=False)
+        rospy.init_node('scene_updater', anonymous=False)
 
         # Moveit Commander initializers:
         self.robot = mgc("manipulator")
@@ -74,7 +74,7 @@ class scene_updater(transformations):
         self.fresh_msg = False
         self.t_plus = ''
         self.got_reset = False
-        self.error = "none"
+        self.error_list = []
         self.object_action = ''
         self.object_name = ''
         self.euler_pose = []
@@ -111,7 +111,7 @@ class scene_updater(transformations):
             self.common_msg.fresh_msg = self.fresh_msg
             self.common_msg.t_plus = str( "%.1f" % self.timer_elapsed()) + " seconds since last msg"
             self.common_msg.got_reset = self.got_reset
-            self.common_msg.error = self.error
+            self.common_msg.error_list = self.error_list
             
             # Construct the whole message:
             self.main_msg.state = self.common_msg
@@ -259,7 +259,7 @@ class scene_updater(transformations):
             self.error = "none"
         elif name not in list(self.get_attached_objects()) and name in self.get_objects() and name in self.object_name_cases:
             self.error = "Object named: " + name + "not attached."
-        elif name not in self.get_objects() name in self.object_name_cases:
+        elif name not in self.get_objects() and name in self.object_name_cases:
             self.error = "Object named: " + name + "not in the scene."
         elif name not in self.object_name_cases:
             self.error = "Object named: " + name + "not valid."
