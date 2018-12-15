@@ -60,6 +60,7 @@ add_message_files(
   SceneUpdaterSPToUni.msg
   SceneUpdaterUniToSP.msg
   PsiObjectPose.msg
+  SavedPoses.msg
 )
 
 ## Generate services in the 'srv' folder

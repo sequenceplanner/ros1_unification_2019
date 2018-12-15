@@ -5,7 +5,8 @@
 #----------------------------------------------------------------------------------------
     # Endre Eres
     # Universal Robots UR10 Pose Updater
-    # V.1.2.7.
+    # 1.2.8. + support adding for multiple robots
+    # V.1.2.8.
 #----------------------------------------------------------------------------------------
 
 
@@ -27,35 +28,48 @@ from ros1_unification_2019.msg import PoseUpdaterUniToSP
 class ur_pose_updater():
     '''
     Updating the Robot poses and saving them in according csv files.
-    These poses can be later fetched by other nodes.
+    These poses can be later fetched by other nodes. On the local roshub,
+    one robot should be defined and in the multirobot scenario, unique
+    robot names should be used. As long as the robot poses are saved 
+    locally, this script should do the job for every robot (launch with
+    name argument do name the node and know which robot is doing what).
+    All the robots are publishing to the sabe topic, so names are included 
+    in the topic and node names so that we know which robots is which.
+    It actually makes sense to have dedicated state topics for each 
+    robots pose updater node.
     '''
 
     def __init__(self):
 
         # General initialisers:
         roscpp_initialize(sys.argv)
-        rospy.init_node('ur_pose_updater', anonymous=False)
+
+        # Getting the robot name from the parameter server
+        self.robot_param_name = rospy.get_param('ur_robot_name')
+
+        rospy.init_node('ur_' + self.robot_param_name + '_pose_updater', anonymous=False)
 
         # Moveit Commander initializers:
         self.robot = mgc("manipulator")
-
-        # Getting the robot name from the parameter server
-        self.robot_name = rospy.get_param('ur_robot_name')
       
         # Subscribers and Publishers:
+        '''
+        getting a message from one topic from sp. As many status topics as robots is generated with the help of launch files.
+        '''
+
         rospy.Subscriber("/unification_roscontrol/ur_pose_updater_sp_to_uni", PoseUpdaterSPToUni, self.sp_callback)
-        self.main_publisher = rospy.Publisher("unification_roscontrol/ur_pose_updater_uni_to_sp", PoseUpdaterUniToSP, queue_size=10)
+        self.main_publisher = rospy.Publisher("unification_roscontrol/ur_" + self.robot_param_name + "_pose_updater_uni_to_sp", PoseUpdaterUniToSP, queue_size=10)
 
         # ROS package localizer:
         self.rospack = rospkg.RosPack()
 
         # Pose file destinations:
-        self.file_joint_input = self.rospack.get_path('ros1_unification_2019') + '/poses/ur_' + self.robot_name + '_joint_poses.csv'
-        self.file_tcp_input = self.rospack.get_path('ros1_unification_2019') + '/poses/ur_' + self.robot_name + '_tcp_poses.csv'
-        self.file_joint_oldpose = self.rospack.get_path('ros1_unification_2019') + '/poses/_' + self.robot_name + '_joint_oldpose.csv'
-        self.file_joint_newpose = self.rospack.get_path('ros1_unification_2019') + '/poses/_' + self.robot_name + '_joint_newpose.csv'
-        self.file_tcp_oldpose = self.rospack.get_path('ros1_unification_2019') + '/poses/_' + self.robot_name + '_tcp_oldpose.csv'
-        self.file_tcp_newpose = self.rospack.get_path('ros1_unification_2019') + '/poses/_' + self.robot_name + '_tcp_newpose.csv'
+        self.file_joint_input = self.rospack.get_path('ros1_unification_2019') + '/poses/ur_' + self.robot_param_name + '_joint_poses.csv'
+        self.file_tcp_input = self.rospack.get_path('ros1_unification_2019') + '/poses/ur_' + self.robot_param_name + '_tcp_poses.csv'
+        self.file_joint_oldpose = self.rospack.get_path('ros1_unification_2019') + '/poses/_' + self.robot_param_name + '_joint_oldpose.csv'
+        self.file_joint_newpose = self.rospack.get_path('ros1_unification_2019') + '/poses/_' + self.robot_param_name + '_joint_newpose.csv'
+        self.file_tcp_oldpose = self.rospack.get_path('ros1_unification_2019') + '/poses/_' + self.robot_param_name + '_tcp_oldpose.csv'
+        self.file_tcp_newpose = self.rospack.get_path('ros1_unification_2019') + '/poses/_' + self.robot_param_name + '_tcp_newpose.csv'
         
         # Robot link idenifiers:
         self.ur10_links = ['base_link', 'shoulder_link', 'elbow_link', 'wrist_1_link', 'wrist_2_link', 'wrist_3_link', 'tool0', 'ee_link']
@@ -94,6 +108,7 @@ class ur_pose_updater():
         self.pose_type = ''
         self.action = ''
         self.done_action = ''
+        self.robot_name = ''
         self.got_pose_name = ''
         self.got_pose_type = ''
         self.got_robot_type = ''
@@ -103,6 +118,7 @@ class ur_pose_updater():
         self.action_method_error = ""
         self.pose_type_error = ""
         self.robot_type_error = ""
+        self.robot_name_error = ""
         
         # Publisher rates:
         self.main_pub_rate = rospy.Rate(10)
@@ -111,13 +127,13 @@ class ur_pose_updater():
         rospy.sleep(3)
 
         # Check if Robot Name argument is correct:
-        if self.robot_name in self.ur10_robot_name_cases:
+        if self.robot_param_name in self.ur10_robot_name_cases:
 
             # Main loop method call:
             self.main()
 
         else:
-            self.common_msg.error_list.append("robot name: " + self.robot_name + " not valid.")
+            self.common_msg.error_list.append("robot name: " + self.robot_param_name + " not valid.")
             print("robot name: " + self.robot_name + " not valid.")
             self.main_msg.state = self.common_msg
             self.main_publisher.publish(self.main_msg)
@@ -207,7 +223,8 @@ class ur_pose_updater():
         error_list = []
         potential_error_list = [self.action_method_error,
                                 self.pose_type_error,
-                                self.robot_type_error]
+                                self.robot_type_error,
+                                self.robot_name_error]
 
         if all((err == "") for err in potential_error_list):
             error_list = []
@@ -379,57 +396,74 @@ class ur_pose_updater():
         '''
 
         # Check if according robot type:
-        if data.robot_type == "ur10":
+        if data.robot_type == "UR10":
 
-            # Assigning for remote reuse
-            self.robot_type_error = ""
-            self.action = data.action
-            self.robot_type = data.robot_type
-            self.pose_type = data.pose_type
-            self.pose_name = data.pose_name
+            # Check if valid robot name
+            if data.robot_name in self.ur10_robot_name_cases:
+            
+                # Addressing only if the script is true for the name
+                if data.robot_name == self.robot_param_name:
+                
+                    # Assigning for remote reuse
+                    self.robot_type_error = ""
+                    self.action = data.action
+                    self.robot_type = data.robot_type
+                    self.pose_type = data.pose_type
+                    self.pose_name = data.pose_name
 
-            # Refreshing the message and restarting the stopwatch
-            self.callback_timeout = time.time() + self.message_freshness
-            self.timer_start()
+                    # Refreshing the message and restarting the stopwatch
+                    self.callback_timeout = time.time() + self.message_freshness
+                    self.timer_start()
 
-            # Check for the 'reset' flag
-            if self.pose_name == "reset":
-                self.prev_pose_name = "reset"
-            else:
-                pass
+                    # Check for the 'reset' flag
+                    if self.pose_name == "reset":
+                        self.prev_pose_name = "reset"
+                    else:
+                        pass
 
-            # Pose type switching
-            if self.pose_type in self.pose_type_cases:
-                self.pose_type_switch_error = ""
-                self.pose_case = self.switcher(self.pose_type, self.pose_type_cases)
-            else:
-                self.pose_type_switch_error = "pose type: " + self.pose_type + " not valid."
+                    # Pose type switching
+                    if self.pose_type in self.pose_type_cases:
+                        self.pose_type_switch_error = ""
+                        self.pose_case = self.switcher(self.pose_type, self.pose_type_cases)
+                    else:
+                        self.pose_type_switch_error = "pose type: " + self.pose_type + " not valid."
 
-            # Action type switching
-            if self.action in self.action_type_cases:
-                self.action_method_switch_error = ""
-                self.action_case = self.switcher(self.action, self.action_type_cases)
-            else:
-                self.action_method_switch_error = "action: " + self.action + " not valid."
+                    # Action type switching
+                    if self.action in self.action_type_cases:
+                        self.action_method_switch_error = ""
+                        self.action_case = self.switcher(self.action, self.action_type_cases)
+                    else:
+                        self.action_method_switch_error = "action: " + self.action + " not valid."
 
-            # Evaluate messages only once and use the 'reset' flag if stuck
-            if self.pose_name != self.prev_pose_name:
-                if self.action_method_switch_error == "" and self.pose_type_switch_error == "":
-                    self.action_method_switch(self.action_case)
+                    # Evaluate messages only once and use the 'reset' flag if stuck
+                    if self.pose_name != self.prev_pose_name:
+                        if self.action_method_switch_error == "" and self.pose_type_switch_error == "":
+                            self.action_method_switch(self.action_case)
+                        else:
+                            pass
+                    else:
+                        pass
                 else:
-                    pass
+                    self.robot_type_error = ""
+                    self.action = "SKIPPED"
+                    self.done_action = "SKIPPED"
             else:
-                pass
+                self.robot_name_error = "UR10 robot name: " + data.robot_name + " not valid."
 
-        elif data.robot_type == "iiwa7":
+        elif data.robot_type == "UR10" and data.robot_name not in self.ur10_robot_name_cases:
+            self.robot_name_error = "robot name: " + data.robot_name + " not valid."
+            
+
+        elif data.robot_type == "IIWA7" and data.robot_name in self.ur10_robot_name_cases:
             self.robot_type_error = ""
             self.action = "SKIPPED"
             self.robot_type = data.robot_type
             self.done_action = "SKIPPED"
-        
+
         else:
             self.robot_type = data.robot_type
-            self.robot_type_error = "robot: " + self.robot_type + " not valid."
+            self.robot_type_error = "robot type: " + self.robot_type + " not valid."
+            
             
 
     def switcher(self, what, case_list):
