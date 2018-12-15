@@ -1,10 +1,30 @@
 # ros1_unification_2019
 
+UPDATE README
+
 - Package for the ROS1 part of the Unification project for 2019.
 - Using the ee_link for the end effector link, so tool0_controller is not used because it does not give consistent data. 
 - A possible solution (proposed by Christian - FCC) is to update the URDF's with the actual Denavit-Hartenberg parameters downloaded from the UR10's themself. A downside to that solution is that it has to be done for every robot separately, but promisses to give reliable data. 
 
-### ur_pose_updater
+## ur_pose_updater
+
+Pose updating can be done for multiple robots
+
+This script should be run through a roslaunch 
+
+Run this script through a roslaunch file with a robot_name argument or set the robot_name parameter elsewhere 
+      before running the script
+'''
+INFO: Run this script through a roslaunch file with a robot_name argument or set the robot_name parameter elsewhere 
+      before running the script
+'''
+
+
+'''
+INFO: Run this script through a roslaunch file with a robot_name argument or set the robot_name parameter elsewhere 
+      before running the script
+'''
+
 
 - Can be used to to save, update and delete saved joint and tcp poses for the UR10 robot in separate csv files.
 - Message type UpdaterSPToUni holds:

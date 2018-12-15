@@ -53,6 +53,7 @@ add_message_files(
   Common.msg
   PoseUpdaterUniToSP.msg
   PoseUpdaterSPToUni.msg
+  PoseUpdaterSPToUniRicochet.msg
   MoveItUniToSP.msg
   MoveItSPToUni.msg
   RobotiqUniToSP.msg

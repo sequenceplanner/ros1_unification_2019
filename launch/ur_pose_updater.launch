@@ -3,7 +3,7 @@
 <launch>
 
   <arg name="robot_name" default="TARS"/>
-  <param name="ur_robot_name" value="$(arg robot_name)"/>
+  <param name="robot_name" value="$(arg robot_name)"/>
   <node pkg="ros1_unification_2019" name="ur_$(arg robot_name)_pose_updater" type="ur_pose_updater.py">
   
   </node>
