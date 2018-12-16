@@ -4,30 +4,35 @@
 # authors, description, version
 #----------------------------------------------------------------------------------------------------------------------#
     # Endre Eres
-    # Universal Robots UR10 Pose Updater
-    # V.1.3.1.
+    # UR Pose Unification Driver
+    # V.0.7.0.
 #----------------------------------------------------------------------------------------------------------------------#
 
 import rospy
 import roslib
 import rospkg
-import time
+import numpy
+import ast
 import sys
-import os
+import time
 import csv
+from std_msgs.msg import String
+from geometry_msgs.msg import Pose
+from geometry_msgs.msg import PoseStamped
+from sensor_msgs.msg import JointState
+from transformations import transformations
 from moveit_commander import MoveGroupCommander as mgc
 from moveit_commander import roscpp_initialize, roscpp_shutdown
 from ros1_unification_2019.msg import Common
-from ros1_unification_2019.msg import SavedPoses
-from ros1_unification_2019.msg import PoseUpdaterSPToUni
-from ros1_unification_2019.msg import PoseUpdaterSPToUniRicochet as Ricochet
-from ros1_unification_2019.msg import PoseUpdaterUniToSP
+from ros1_unification_2019.msg import URPoseSPToUni
+from ros1_unification_2019.msg import URPoseSPToUniRicochet as Ricochet
+from ros1_unification_2019.msg import URPoseUniToSP
 
 
-class ur_pose_updater():
+class ur_pose_unidriver(transformations):
     '''
-    Updating the Robot poses and saving them in according csv files. These poses can be later fetched by other nodes. 
-    On the local roshub, one robot should be defined and in the multirobot scenario unique robot names should be used.
+    Moving the UR10 robot to the demanded poses that are saved in according csv files.On the local roshub, one robot 
+    should be defined and in the multirobot scenario unique robot names should be used.
     '''
 
     def __init__(self):
@@ -35,19 +40,21 @@ class ur_pose_updater():
         # Moveit Commander initializer:
         roscpp_initialize(sys.argv)
 
-        # Getting the robot_name parameter from the parameter server:
+        # Getting the robot_name parameter from the parameter server (maybe shouldn't be set to global):
         self.robot_name_param = rospy.get_param('robot_name')
 
         # ROS node initializer:
-        rospy.init_node('ur_' + self.robot_name_param + '_pose_updater', anonymous=False)
+        rospy.init_node('ur_' + self.robot_name_param + '_pose_unidriver', anonymous=False)
 
         # Move Group specifier:
         self.robot = mgc("manipulator")
       
         # Subscribers and Publishers:
-        rospy.Subscriber("/unification_roscontrol/ur_pose_updater_sp_to_uni", PoseUpdaterSPToUni, self.sp_callback)
+        rospy.Subscriber("/unification_roscontrol/ur_pose_unidriver_sp_to_uni", URPoseSPToUni, self.sp_callback)
+        rospy.Subscriber("/joint_states", JointState, self.jointCallback)
         self.main_publisher = rospy.Publisher("unification_roscontrol/ur_" \
-            + self.robot_name_param + "_pose_updater_uni_to_sp", PoseUpdaterUniToSP, queue_size=10)
+            + self.robot_name_param + "_pose_unidriver_uni_to_sp", URPoseUniToSP, queue_size=10)
+        self.urScriptPublisher = rospy.Publisher("/ur_driver/URScript", String, queue_size=10)
 
         # ROS package localizer:
         self.rospack = rospkg.RosPack()
@@ -59,73 +66,87 @@ class ur_pose_updater():
         self.file_tcp_input = self.rospack.get_path('ros1_unification_2019') + '/poses/ur_' \
                                                                              + self.robot_name_param \
                                                                              + '_tcp_poses.csv'
-        self.file_joint_oldpose = self.rospack.get_path('ros1_unification_2019') + '/poses/_' \
-                                                                                 + self.robot_name_param \
-                                                                                 + '_joint_oldpose.csv'
-        self.file_joint_newpose = self.rospack.get_path('ros1_unification_2019') + '/poses/_' \
-                                                                                 + self.robot_name_param \
-                                                                                 + '_joint_newpose.csv'
-        self.file_tcp_oldpose = self.rospack.get_path('ros1_unification_2019') + '/poses/_' \
-                                                                               + self.robot_name_param \
-                                                                               + '_tcp_oldpose.csv'
-        self.file_tcp_newpose = self.rospack.get_path('ros1_unification_2019') + '/poses/_' \
-                                                                               + self.robot_name_param \
-                                                                               + '_tcp_newpose.csv'
         
-        # Robot link idenifiers:
-        self.ur10_links = ['base_link', 'shoulder_link', 'elbow_link', 'wrist_1_link', \
-                           'wrist_2_link', 'wrist_3_link', 'tool0', 'ee_link']
-        self.iiwa7_links = ['iiwa7_link_0', 'iiwa7_link_1', 'iiwa7_link_2', 'iiwa7_link_3', \
-                            'iiwa7_link_4', 'iiwa7_link_5', 'iiwa7_link_6', 'iiwa7_link_ee']
-
         # Switcher lists of cases for implementing a switch-case like behavior:
         self.robot_type_cases = ['UR10', 'IIWA7']
         self.ur10_robot_name_cases = ['TARS', 'KIPP', 'CASE']
         self.iiwa7_robot_name_cases = ['PLEX']
         self.all_robot_names = self.ur10_robot_name_cases + self.iiwa7_robot_name_cases
         self.pose_type_cases = ['JOINT', 'TCP']
-        self.action_type_cases = ['UPDATE', 'DELETE', 'CLEAR']
+        self.action_type_cases = ['MOVEJ', 'MOVEL', 'PLANNED']
         self.file_input_cases = [self.file_joint_input, self.file_tcp_input]
-        self.file_oldpose_cases = [self.file_joint_oldpose, self.file_tcp_oldpose]
-        self.file_newpose_cases = [self.file_joint_newpose, self.file_tcp_newpose]
 
         # Message freshness definition in seconds:
         self.message_freshness = 3
 
         # Message type initializers:
-        self.main_msg = PoseUpdaterUniToSP()
+        self.pose = Pose()
+        self.joints = JointState()
+        self.main_msg = URPoseUniToSP()
         self.common_msg = Common()
-        self.poses_msg = SavedPoses()
         self.ricochet_msg = Ricochet()
 
         # Timeout and Stopwatch initializers:
         self.callback_timeout = time.time()
         self.start = time.time()
 
-        # Message value initializers:
+        # Pose check tolerance initializers:
+        self.joint_tol = 0.01
+        self.tcp_tol = 0.01
+
+        # Common message value initializers:
+        self.robot_name = ''
         self.fresh_msg = False
         self.t_plus = ''
         self.got_reset = False
         self.error_list = []
-        self.pose_name = ''
-        self.prev_pose_name = ''
-        self.robot_type = ''
-        self.pose_type = ''
-        self.action = ''
-        self.done_action = ''
-        self.robot_name = ''
-        self.got_pose_name = ''
-        self.got_pose_type = ''
-        self.got_robot_type = ''
-        self.got_action = ''
 
-        # Error handler value Initializers:
+        # URPoseSpToUni message value initializers:
+        self.action = ''
+        self.robot_type = ''
+        self.robot_name = ''
+        self.pose_type = ''
+        self.pose_name = ''
+        self.speed_scaling = 0.0
+        self.acc_scaling = 0.0
+        self.goal_tolerance = 0.0
+
+        # Ricochet Message value initializers:
+        self.got_action = ''
+        self.got_robot_type = ''
+        self.got_robot_name = ''
+        self.got_pose_type = ''
+        self.got_pose_name = ''
+        self.got_speed_scaling = 0.0
+        self.got_acc_scaling = 0.0
+        self.got_goal_tolerance = 0.001
+
+        # Main message value initializers:
+        self.moving = False
+        self.actual_pose = ''
+
+        # Other:
+        self.prev_pose_name = ''
+
+        # Error handler value initializers:
         self.action_method_error = ''
-        self.pose_type_error = ''
         self.robot_type_error = ''
         self.robot_name_error = ''
+        self.pose_type_error = ''
+        self.pose_name_error = ''
+        self.pose_length_error = ''
+
+        # Robot joint identifiers:
+        self.joints.name = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint', \
+                            'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
+
+        # Robot link idenifiers:
+        self.ur10_links = ['base_link', 'shoulder_link', 'elbow_link', 'wrist_1_link', \
+                           'wrist_2_link', 'wrist_3_link', 'tool0', 'ee_link']
+        self.iiwa7_links = ['iiwa7_link_0', 'iiwa7_link_1', 'iiwa7_link_2', 'iiwa7_link_3', \
+                            'iiwa7_link_4', 'iiwa7_link_5', 'iiwa7_link_6', 'iiwa7_link_ee']
         
-        # Publisher rates:
+         # Publisher rates:
         self.main_pub_rate = rospy.Rate(10)
        
         # Some time to assure initialization:
@@ -170,16 +191,15 @@ class ur_pose_updater():
             self.ricochet_msg.got_robot_name = self.robot_name
             self.ricochet_msg.got_pose_type = self.pose_type
             self.ricochet_msg.got_pose_name = self.pose_name
-
-            # Construct saved poses message part:
-            self.poses_msg.joint_pose_list = self.read_and_generate_pose_list(self.file_joint_input)
-            self.poses_msg.tcp_pose_list = self.read_and_generate_pose_list(self.file_tcp_input)
+            self.ricochet_msg.got_speed_scaling = self.got_speed_scaling
+            self.ricochet_msg.got_acc_scaling = self.got_acc_scaling
+            self.ricochet_msg.got_goal_tolerance = self.got_goal_tolerance
 
             # Construct the whole message:
             self.main_msg.info = self.common_msg
             self.main_msg.ricochet = self.ricochet_msg
-            self.main_msg.saved_poses = self.poses_msg
-            self.main_msg.last_completed_action = self.done_action
+            self.main_msg.moving = self.moving
+            self.main_msg.actual_pose = self.actual_pose
             
             # Publish the message and sleep a bit:
             self.main_publisher.publish(self.main_msg)
@@ -204,7 +224,7 @@ class ur_pose_updater():
 
         return str('%.1f' % (time.time() - self.start)) + " seconds"
 
-
+    
     def switcher(self, what, case_list):
         '''
         Implementing a switch-case like behavior with switcher lists
@@ -226,6 +246,7 @@ class ur_pose_updater():
         error_list = []
         potential_error_list = [self.action_method_error,
                                 self.pose_type_error,
+                                self.pose_name_error,
                                 self.robot_type_error,
                                 self.robot_name_error]
 
@@ -259,111 +280,180 @@ class ur_pose_updater():
         return pose_list
 
 
-    def delete_pose(self, input_f, newpose_f, pose_name, pose_type):
+    def list_to_pose(self, list):
         '''
-        Delete one pose from a pose list.
-        '''
-        
-        with open(input_f, "rb") as f_in, open(newpose_f, "wb") as f_np:
-            csv_input = csv.reader(f_in, delimiter=':')
-            for row in csv_input:
-                if row[0] != pose_name:
-                    csv.writer(f_np, delimiter = ':').writerow(row)
-                else:
-                    pass
-        
-        os.remove(input_f)
-        os.rename(newpose_f, input_f)
-        self.done_action = 'deleted: ' + str(pose_name) + ' from ' + str(pose_type) + ' list'
-
-
-    def clear_pose_list(self, input_f, newpose_f, pose_type):
-        '''
-        Delete all poses from a pose list.
-        '''
-        
-        with open(input_f, "rb") as f_in, open(newpose_f, "wb") as f_np:
-            csv_input = csv.reader(f_in, delimiter=':')
-            for row in csv_input:
-                if row[0] == 'control_pose':
-                    csv.writer(f_np, delimiter = ':').writerow(row)
-                else:
-                    pass
-
-        os.remove(input_f)
-        os.rename(newpose_f, input_f)
-        self.done_action = 'cleared: ' + str(pose_type) + ' list'
-
-
-    def update_pose_list(self, input_f, oldpose_f, newpose_f, name, pose_type, function):
-        '''
-        Update a pose list by appending a new pose or updating an existing one.
-        '''
-        
-        with open(input_f, 'r') as csv_read:
-            csv_reader = csv.reader(csv_read, delimiter=':')
-            if all((row[0] != name) for row in csv_reader):
-                self.append_new_pose(input_f, name, function) # Function gets pose in this case
-                self.done_action = 'appended: ' + str(name) + ' to ' + str(pose_type) + ' list'
-            else:
-                self.update_split(input_f, oldpose_f, newpose_f, name, function)
-                self.done_action = 'updated: ' + str(name) + ' in ' + str(pose_type) + ' list'
-
-        
-    def read_and_generate_pose_list(self, input_f):
-        '''
-        Acquire the names of all saved poses from a file to a list.
+        Transform a list into a Pose() type
         '''
 
-        pose_list = []
+        self.pose.position.x = list[0]
+        self.pose.position.y = list[1]
+        self.pose.position.z = list[2]
+        self.pose.orientation.x = list[3]
+        self.pose.orientation.y = list[4]
+        self.pose.orientation.z = list[5]
+        self.pose.orientation.w = list[6]
+        return self.pose
+
+
+    def find_pose(self, name, input_f):
+        '''
+        Returns the saved pose that matches the pose name
+        '''
+
+        pose = []
         with open(input_f, 'r') as f_in:
-            csv_input = csv.reader(f_in, delimiter=':')
-            for row in csv_input:
-                pose_list.append(row[0])
-            return pose_list
-
-
-    def update_split(self, input_f, oldpose_f, newpose_f, name, pose):
-        '''
-        Update the values of an existing pose in a pose list by saving it in a newpose file. The poses that are not 
-        being updated are saved in a oldpose list and those two lists are merged in the update_merge method. 
-        '''
-
-        with open(input_f, "rb") as f_in, open(oldpose_f, "wb") as f_op, open(newpose_f, "wb") as f_np:
-            csv_input = csv.reader(f_in, delimiter=':')
-            for row in csv_input:
-                if row[0] == name:
-                    csv.writer(f_np, delimiter = ':').writerow([name, pose])
+            csv_reader = csv.reader(f_in, delimiter=':')
+            for row in csv_reader:
+                if name == row[0]:
+                    pose = ast.literal_eval(row[1])
+                    break
                 else:
-                    csv.writer(f_op, delimiter = ':').writerow([row[0], row[1]])
+                    pass
 
-        self.update_merge(input_f, newpose_f, oldpose_f)
+        if pose != []:
+            self.pose_name_error = ''
+            return pose
+        else:
+            self.pose_name_error = 'pose with the name ' + name + ' not saved'
 
 
-    def update_merge(self, input_f, newpose_f, oldpose_f):
+    def movej(self, input_f, name, a, v):
         '''
-        Merge an olpose and a newpose list and thus form an updated pose list. 
+        Currently only for joint poses.
+        Using the URScript API, move to a position with a linear in joint-space move.
+        '''
+        joint_pose = []
+        joint_pose = self.find_pose(name, input_f)
+
+        if len(joint_pose) == 6:
+            self.pose_length_error = ''
+            script_str = "movej(" + str(joint_pose) + ", a=" + str(a) + ", v=" + str(v) + ", t=" + str(0) \
+            + ", r=" + str(0) + ")"
+            self.urScriptPublisher.publish(script_str)
+            print(name)
+        else:
+            self.pose_length_error = 'invalid joint pose length' 
+
+
+    def movel(self, input_f, name, a, v):
+        '''
+        Currently only for tcp poses.
+        Using the URScript API, move to a position with a linear in tool-space move.
         '''
 
-        with open(newpose_f, "r") as f_np:
-            csv_input = csv.reader(f_np, delimiter=':')
-            for row in csv_input:
-                with open(oldpose_f, "a") as f_op:
-                    csv.writer(f_op, delimiter = ':').writerow([row[0], row[1]])
+        quat_pose = self.find_pose(name, input_f)
+
+        if len(quatPose) == 7:
+            self.pose_length_error = ''
+            rot = self.quat_to_rot(quatPose)
+            script_str = "movel(p" + str(rot) + ", a=" + str(a) + ", v=" + str(v) + ", t=" + str(0) + ")"
+            self.urScriptPublisher.publish(script_str)
+            print(name)
+        else:
+            self.pose_length_error = 'invalid tcp pose length'
+
+    
+    def planned_move(self, input_f, name, pose_type, a, v):
+        '''
+        Using the movegroup_commander class from MoveIt, plan and execute a trajectory to a joint or a tcp pose
+        '''
+        pose = self.find_pose(input_f, name)
+
+        if pose_type == "JOINT":
+            self.joints.position = pose
+            self.robot.go(self.joints, wait = False)
+            rospy.sleep(1)
+        elif pose_type == "TCP":
+            quat_pose = self.list_to_pose(pose)
+            self.robot.go(quat_pose, wait = False)
+            rospy.sleep(1)
+        else:
+            pass
+
+        # with open(input_f, 'r') as joint_csv:
+        #     joint_csv_reader = csv.reader(joint_csv, delimiter=':')
+        #     for row in joint_csv_reader:
+        #         if row[0] == name:
+        #         self.pose_name_error = ''
+        #             if pose_type == "JOINT":
+        #                 self.pose_type_error = ''
+        #                 self.joints.position = ast.literal_eval(row[1])
+        #                 self.robot.go(self.joints, wait = False)
+        #                 rospy.sleep(1)
+        #             elif pose_type == "TCP":
+        #                 self.pose_type_error = ''
+        #                 quat_pose = self.list_to_pose(ast.literal_eval(row[1]))
+        #                 self.robot.go(quat_pose, wait = False)
+        #                 rospy.sleep(1)
+        #             else:
+        #                 self.pose_type_error = 'invalid pose type: ' + pose_type
+        #         else:
+        #             self.pose_name_error = 'pose with the name ' + name + ' not saved'
+
+    
+    def get_static_joint_pose(self):
+        '''
+        While all joint velocities are 0, compare current robot joint pose with saved poses in the joint_csv file
+        and return the name of the saved pose if they match with a tolerance, else return unknown as the 
+        current joint pose.
+        '''
+
+        current_pose = self.robot.get_current_joint_values()
+
+        with open(self.joint_pose_file, 'r') as joint_csv:
+            joint_csv_reader = csv.reader(joint_csv, delimiter=':')
+            for row in joint_csv_reader:
+                saved_pose = ast.literal_eval(row[1])
+                if all(numpy.isclose(current_pose[i], saved_pose[i], atol=self.joint_tol) for i in range(0, 5)):
+                    actual_joint_pose = row[0]
+                    break
+                else:
+                    actual_joint_pose = "UNKNOWN"
+                    pass
         
-        os.remove(input_f)
-        os.remove(newpose_f)
-        os.rename(oldpose_f, input_f)
+        return actual_joint_pose
 
 
-    def append_new_pose(self, file, name, pose):
+    def get_static_tcp_pose(self):
         '''
-        Append a nonexisting pose to a pose list.
+        While all joint velocities are 0, compare current robot tcp pose with saved poses in the tcp_csv file
+        and return the name of the saved pose if they match with a tolerance, else return unknown as the 
+        current tcp pose.
         '''
 
-        with open(file, 'a') as csv_append:
-            csv_appender = csv.writer(csv_append, delimiter=':')
-            csv_appender.writerow([name, pose])
+        current_pose = self.pose_to_list(self.robot.get_current_pose("ee_link"))
+            
+        with open(self.tcp_pose_file, 'r') as tcp_csv:
+            tcp_csv_reader = csv.reader(tcp_csv, delimiter=':')
+            for row in tcp_csv_reader:
+                saved_pose = ast.literal_eval(row[1])
+                if all(numpy.isclose(current_pose[i], saved_pose[i], atol=self.tcp_tol) for i in range(0, 6)):
+                    actual_tcp_pose = row[0]
+                    break
+                else:
+                    actual_tcp_pose = "UNKNOWN"
+                    pass
+        
+        return actual_tcp_pose
+
+
+    def generate_current_pose(self):
+        '''
+        add comment here...
+        '''
+
+        actual_pose = ''
+
+        if self.moving == False:
+            if self.actual_joint_pose == "UNKNOWN":
+                actual_pose = self.get_static_tcp_pose()
+            else:
+                actual_pose = self.get_static_joint_pose()
+        else:
+            # maybe prev_prev because prev and act is equalized after cmd
+            actual_pose = 'moving from ' + self.prev_pose_name + 'to' + self.pose_name
+        
+        return actual_pose
 
 
     def action_method_switch(self, action_case):
@@ -372,26 +462,27 @@ class ur_pose_updater():
         '''
 
         if action_case == 0:
-            return self.update_pose_list(self.file_input_cases[self.pose_case],
-                                         self.file_oldpose_cases[self.pose_case],
-                                         self.file_newpose_cases[self.pose_case],
-                                         self.pose_name,
-                                         self.pose_type,
-                                         self.pose_type_switch(self.pose_case))
+            
+            return self.movej(self.file_input_cases[self.pose_case],
+                              self.pose_name,
+                              self.acc_scaling,
+                              self.speed_scaling)
 
         elif action_case == 1:
-            return self.delete_pose(self.file_input_cases[self.pose_case],
-                                    self.file_newpose_cases[self.pose_case],
-                                    self.pose_name,
-                                    self.pose_type)
+            return self.movel(self.file_input_cases[self.pose_case],
+                              self.pose_name,
+                              self.acc_scaling,
+                              self.speed_scaling)
 
         elif action_case == 2:
-            return self.clear_pose_list(self.file_input_cases[self.pose_case],
-                                        self.file_newpose_cases[self.pose_case],
-                                        self.pose_type)
+            return self.planned_move(self.file_input_cases[self.pose_case],
+                                     self.pose_name,
+                                     self.pose_type,
+                                     self.acc_scaling,
+                                     self.speed_scaling)
         else:
             pass
-
+        
 
     def pose_type_switch(self, pose_case):
         '''
@@ -411,12 +502,17 @@ class ur_pose_updater():
         Evaluate and consume the command message from Sequence Planner
         '''
 
+        print("got pose name" + data.pose_name)
+
         # Assigning for remote reuse
         self.action = data.action
         self.robot_name = data.robot_name
         self.robot_type = data.robot_type
         self.pose_type = data.pose_type
         self.pose_name = data.pose_name
+        self.speed_scaling = data.speed_scaling
+        self.acc_scaling = data.acc_scaling
+        self.goal_tolerance = data.goal_tolerance
 
         # Check if according robot type:
         if self.robot_type == "UR10":
@@ -438,8 +534,8 @@ class ur_pose_updater():
                     self.timer_start()
 
                     # Check for the 'reset' flag
-                    if self.pose_name == "RESET":
-                        self.prev_pose_name = "RESET"
+                    if self.pose_name == "reset":
+                        self.prev_pose_name = "reset"
                     else:
                         pass
 
@@ -491,10 +587,21 @@ class ur_pose_updater():
         elif self.robot_type not in self.robot_type_cases:
             self.robot_type_error = "robot type: " + self.robot_type + " not valid"
             self.done_action = "SKIPPED"
+    
+
+    def jointCallback(self, joint):
+        '''
+        Check if the arm is moving and aid in transport pose generation
+        '''
+
+        if all(joint.velocity[i] == 0 for i in range(0, 5, 1)):
+            self.moving = False
+        else:
+            self.moving = True
 
 
 if __name__ == '__main__':
     try:
-        ur_pose_updater()
+        ur_pose_unidriver()
     except rospy.ROSInterruptException:
         pass

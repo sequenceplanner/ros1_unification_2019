@@ -54,8 +54,9 @@ add_message_files(
   PoseUpdaterUniToSP.msg
   PoseUpdaterSPToUni.msg
   PoseUpdaterSPToUniRicochet.msg
-  MoveItUniToSP.msg
-  MoveItSPToUni.msg
+  URPoseUniToSP.msg
+  URPoseSPToUni.msg
+  URPoseSPToUniRicochet.msg
   RobotiqUniToSP.msg
   RobotiqSPToUni.msg
   SceneUpdaterSPToUni.msg

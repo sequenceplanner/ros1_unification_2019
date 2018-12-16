@@ -5,7 +5,7 @@
 #----------------------------------------------------------------------------------------
     # Endre Eres
     # Helper Class for Transformations
-    # V.0.3.0.
+    # V.0.4.0.
 #----------------------------------------------------------------------------------------
 
 import rospy
@@ -17,9 +17,11 @@ import tf
 class transformations:
 
     def quat_to_rpy(self, x, y, z, qx, qy, qz, qw):
-        "returns euler rpy vector from quaternions"
-	
-	quaternions = (qx, qy, qz, qw)
+        '''
+        Returns euler rpy vector from quaternions
+        '''
+
+        quaternions = (qx, qy, qz, qw)
         euler = tf.transformations.euler_from_quaternion(quaternions)
 
         roll = euler[0]
@@ -28,20 +30,26 @@ class transformations:
 
         return [x, y, z, roll, pitch, yaw]
 
+
     def rpy_to_quat(self, x, y, z, roll, pitch, yaw):
-	"returns quaternions from euler rpy vector"
+        '''
+	    Returns quaternions from euler rpy vector
+        '''
 
         quaternion = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
 
-	qx = quaternion[0]
+        qx = quaternion[0]
         qy = quaternion[1]
         qz = quaternion[2]
         qw = quaternion[3]
 
         return [x, y, z, qx, qy, qz, qw]
 
+
     def rpy_to_rot(self, x, y, z, roll, pitch, yaw):
-        "returns rotational vector from euler rpy"
+        '''
+        returns rotational vector from euler rpy
+        '''
 
         yawMatrix = numpy.matrix([
         [math.cos(yaw), -math.sin(yaw), 0],
@@ -74,7 +82,9 @@ class transformations:
 
     
     def quat_to_rot(self, x, y, z, qx, qy, qz, qw):
-        "returns rotational vector from quaternions"
+        '''
+        Returns rotational vector from quaternions
+        '''
 
         rpy = [0, 0, 0, 0, 0, 0]
         rpy = self.quat_to_rpy(x, y, z, qx, qy, qz, qw)

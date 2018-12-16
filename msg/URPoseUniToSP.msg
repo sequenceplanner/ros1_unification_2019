@@ -1,0 +1,4 @@
+Common info
+URPoseSPToUniRicochet ricochet
+bool moving
+string actual_pose
