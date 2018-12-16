@@ -1,2 +1,2 @@
-string object_name
-float32[] object_pose
+string scene_object_name
+float32[] scene_object_pose

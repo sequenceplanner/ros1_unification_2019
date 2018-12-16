@@ -60,6 +60,7 @@ add_message_files(
   RobotiqUniToSP.msg
   RobotiqSPToUni.msg
   SceneUpdaterSPToUni.msg
+  SceneUpdaterSPToUniRicochet.msg
   SceneUpdaterUniToSP.msg
   PsiObjectPose.msg
   SavedPoses.msg

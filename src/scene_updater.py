@@ -5,7 +5,7 @@
 #----------------------------------------------------------------------------------------
     # Endre Eres
     # Unification Scene Updater
-    # V.0.3.0.
+    # V.0.9.8. alpha
 #----------------------------------------------------------------------------------------
 
 import rospy
@@ -21,6 +21,7 @@ from moveit_commander import roscpp_initialize, roscpp_shutdown
 from transformations import transformations 
 from ros1_unification_2019.msg import Common
 from ros1_unification_2019.msg import SceneUpdaterSPToUni
+from ros1_unification_2019.msg import SceneUpdaterSPToUniRicochet as Ricochet
 from ros1_unification_2019.msg import SceneUpdaterUniToSP
 from ros1_unification_2019.msg import PsiObjectPose
 
@@ -58,6 +59,11 @@ class scene_updater(transformations):
         # UR10 link idenifiers:
         self.ur10_links = ['base_link', 'shoulder_link', 'elbow_link', 'wrist_1_link', 'wrist_2_link', 'wrist_3_link', 'tool0', 'ee_link']
 
+        # Switcher lists of cases for implementing a switch-case like behavior:
+        self.object_action_cases = ['ADD', 'REMOVE', 'MOVE', 'CLEAR', 'ATTACH', 'DETACH']
+        self.object_name_cases = ['LF', 'TSTOOL', 'AGV', 'ENGINE'] # Gradually add more...
+        self.object_file_cases = [self.lf_mesh, self.ts_tool_mesh, self.agv_mesh, self.engine_mesh]
+
         # Message freshness definition in seconds:
         self.message_freshness = 3
 
@@ -65,22 +71,40 @@ class scene_updater(transformations):
         self.main_msg = SceneUpdaterUniToSP()
         self.obj_msg = PsiObjectPose()
         self.common_msg = Common()
+        self.ricochet_msg = Ricochet()
+        self.psi_msg = PsiObjectPose()
 
         # Initialize timeout and stopwatch
         self.callback_timeout = time.time()
         self.start = time.time()
 
-        # Message value initializers:
+        # Common message value initializers:
+        self.robot_name = ''
         self.fresh_msg = False
         self.t_plus = ''
         self.got_reset = False
         self.error_list = []
+
+        # PsiObjectPose message value initializers:
+        self.scene_object_name = ''
+        self.scene_object_pose = []
+
+        #SceneUpdaterSPToUni message value initializers:
         self.object_action = ''
         self.object_name = ''
         self.euler_pose = []
+
+        # Ricochet message value initializers:
         self.got_object_action = ''
         self.got_object_name = ''
-        self.got_euler_pose = [] 
+        self.got_euler_pose = []
+
+        # Main message value initializers:
+        self.attached_objects = []
+        self.object_poses = []
+
+        # Other:
+        self.prev_object_name = ''
 
         # Publisher rates:
         self.main_pub_rate = rospy.Rate(10)
@@ -97,7 +121,10 @@ class scene_updater(transformations):
         This method spins until an interrupt exception is raised.
         The state message is generated here and published to the
         main publisher topic.
+
         '''
+
+        print(self.scene.get_attached_objects())
 
         while not rospy.is_shutdown():
 
@@ -108,19 +135,27 @@ class scene_updater(transformations):
                 self.fresh_msg = False
 
             # Construct common message part:
+            self.common_msg.robot_name = '' # add read from param later
             self.common_msg.fresh_msg = self.fresh_msg
-            self.common_msg.t_plus = str( "%.1f" % self.timer_elapsed()) + " seconds since last msg"
+            self.common_msg.t_plus = self.timer_elapsed()
             self.common_msg.got_reset = self.got_reset
-            self.common_msg.error_list = self.error_list
+            self.common_msg.error_list = [] #self.generate_error_message()
             
+            # Construct the ricochet message part:
+            self.ricochet_msg.got_object_action = self.object_action
+            self.ricochet_msg.got_object_name = self.object_name
+            self.ricochet_msg.got_euler_pose = self.euler_pose
+
+            #Construct the PsiOvjectPose message part:
+            self.psi_msg.scene_object_name = self.scene_object_name 
+            self.psi_msg.scene_object_pose = self.scene_object_pose 
+
             # Construct the whole message:
             self.main_msg.state = self.common_msg
-            self.main_msg.got_object_action = self.object_action
-            self.main_msg.got_object_name = self.object_name
-            self.main_msg.got_euler_pose = self.euler_pose
-            #self.main_msg.attached_objects = self.attached_objects()
-            self.main_msg.object_poses = self.object_poses()
-
+            self.main_msg.ricochet = self.ricochet_msg
+            self.main_msg.attached_objects = [] # self.attached_objects()
+            self.main_msg.object_poses = [] #self.object_poses()
+            
             # Publish the message and sleep a bit:
             self.main_publisher.publish(self.main_msg)
             self.main_pub_rate.sleep()
@@ -142,7 +177,7 @@ class scene_updater(transformations):
         Measure elapsed time since the last message arrived.
         '''
 
-        return time.time() - self.start
+        return str('%.1f' % (time.time() - self.start)) + " seconds"
 
 
     def attached_objects(self):
@@ -153,6 +188,7 @@ class scene_updater(transformations):
 
         object_list = []
         object_list.append(str(self.scene.get_attached_objects()))
+
         return object_list
 
     
@@ -265,61 +301,89 @@ class scene_updater(transformations):
             self.error = "Object named: " + name + "not valid."
         else:
             pass
+
+    def action_method_switch(self, action_case):
+        '''
+        Call an action method based on the case number.
+        '''
+
+        if action_case == 0:
+            return self.add_object(self.object_name, 
+                                   self.object_file_cases[self.object_name_case], 
+                                   self.euler_pose)
+
+        elif action_case == 1:
+            return self.remove_object(self.object_name)
+
+        elif action_case == 2:
+            return self.move_object(self.object_name, 
+                                    self.euler_pose)
+
+        elif action_case == 3:
+            return self.clear_scene()
+
+        elif action_case == 4:
+            return self.attach_object(self.object_name, 
+                                      self.robot.get_end_effector_link())
+
+        elif action_case == 5:
+            return self.detach_object(self.object_name)
+
+        else:
+            pass
+
     
+    def pose_type_switch(self, pose_case):
+        '''
+        Fetch a current pose depending on the pose type.
+        '''
+
+        if pose_case == 0:
+            return self.robot.get_current_joint_values()
+        elif pose_case == 1:
+            return self.pose_to_list(self.robot.get_current_pose("ee_link"))
+        else:
+            pass
+
     
     def sp_callback(self, data):
         '''
-        Evaluate and use the command message from Sequence Planner
+        Evaluate and consume the command message from Sequence Planner
         '''
-
-        # Refreshing the message
-        self.callback_timeout = time.time() + self.message_freshness
 
         # Assigning for remote reuse
         self.object_action = data.object_action 
         self.object_name = data.object_name
         self.euler_pose = data.euler_pose
 
-        # Check for the 'reset' flag
-        if self.object_name == "reset":
-            self.prev_object_name = "reset"
+        # Check for the 'reset' flag (doesn't make much sense but needed against the SP ping)
+        if self.object_name == "RESET":
+            self.prev_object_name = "RESET"
+            self.got_reset = True
         else:
-            pass
+            self.got_reset = False        
 
-        # Switcher lists of cases for implementing a switch-case like behavior:
-        self.object_action_cases = ['add', 'remove', 'move', 'clear', 'attach', 'detach']
-        self.object_name_cases = ['lf', 'ts_tool', 'agv', 'engine'] # Gradually add more...
-
-        # Checking action command corectness:
-        if self.object_action not in self.object_action_cases:
-            self.error = "Action case: " + name + "not valid."
+        # Object name switching
+        if self.object_name in self.object_name_cases:
+            self.object_name_switch_error = ""
+            self.object_name_case = self.switcher(self.object_name, self.object_name_cases)
         else:
-            pass
+            self.object_name_switch_error = "object name: " + self.object_name + " not valid"
 
-        # Checking object name corectness:
-        if self.object_action not in self.object_action_cases:
-            self.error = "Action case: " + name + "not valid."
+         # Action type switching
+        if self.object_action in self.object_action_cases:
+            self.action_method_switch_error = ""
+            self.object_action_case = self.switcher(self.object_action, self.object_action_cases)
         else:
-            pass
-
-        # Switcher lists of functions for implementing a switch-case like behavior:
-        self.object_name_functions = [self.lf_mesh, self.ts_tool_mesh, self.agv_mesh, self.engine_mesh]
-        self.object_action_functions = [self.add_object(self.object_name, self.object_name_functions[self.object_name_switcher], self.euler_pose),
-                                        self.remove_object(self.object_name),
-                                        self.move_object(self.object_name, self.euler_pose),
-                                        self.clear_scene(),
-                                        self.attach_object(self.object_name, self.robot.get_end_effector_link()),
-                                        self.detach_object(self.object_name)]
-
-        # Instantiate switchers
-        self.object_name_switcher = self.switcher(self.object_name, self.object_name_cases)                               
-        self.object_action_switcher = self.switcher(self.object_action, self.object_action_cases)
+            self.action_method_switch_error = "action: " + self.action + " not valid"
 
         # Evaluate messages only once and use the 'reset' flag if stuck
         if self.object_name != self.prev_object_name:
-            self.object_action_functions[self.object_action_switcher]
-        else:
-            pass
+            if self.action_method_switch_error == "" and self.object_name_switch_error == "":
+                self.prev_object_name = self.object_name
+                self.action_method_switch(self.object_action_case)
+            else:
+                pass
 
         
     def switcher(self, what, case_list):

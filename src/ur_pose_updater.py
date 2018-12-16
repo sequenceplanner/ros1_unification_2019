@@ -418,6 +418,13 @@ class ur_pose_updater():
         self.pose_type = data.pose_type
         self.pose_name = data.pose_name
 
+        # Check for the 'reset' flag
+        if self.pose_name == "RESET":
+            self.prev_pose_name = "RESET"
+            self.got_reset = True
+        else:
+            self.got_reset = False
+
         # Check if according robot type:
         if self.robot_type == "UR10":
 
@@ -436,12 +443,6 @@ class ur_pose_updater():
                     # Refreshing the message and restarting the stopwatch
                     self.callback_timeout = time.time() + self.message_freshness
                     self.timer_start()
-
-                    # Check for the 'reset' flag
-                    if self.pose_name == "RESET":
-                        self.prev_pose_name = "RESET"
-                    else:
-                        pass
 
                     # Pose type switching
                     if self.pose_type in self.pose_type_cases:
