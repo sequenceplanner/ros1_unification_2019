@@ -1,5 +1,10 @@
 # ros1_unification_2019
 
+## STATUS
+### ur_pose_updater - should work
+### ur_pose_unidriver - should work (beta, needs more testing)
+### scene_updater - not really working (alpha, needs more work)
+
 UPDATE README
 
 - Package for the ROS1 part of the Unification project for 2019.
