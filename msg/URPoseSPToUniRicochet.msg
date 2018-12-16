@@ -3,6 +3,6 @@ string got_robot_type
 string got_robot_name
 string got_pose_type
 string got_pose_name
-float32 got_speed_scaling
-float32 got_acc_scaling
-float32 got_goal_tolerance
+string got_speed_scaling
+string got_acc_scaling
+string got_goal_tolerance

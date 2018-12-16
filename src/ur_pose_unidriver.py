@@ -5,7 +5,7 @@
 #----------------------------------------------------------------------------------------------------------------------#
     # Endre Eres
     # UR Pose Unification Driver
-    # V.0.7.0.
+    # V.0.9.9. beta
 #----------------------------------------------------------------------------------------------------------------------#
 
 import rospy
@@ -117,9 +117,9 @@ class ur_pose_unidriver(transformations):
         self.got_robot_name = ''
         self.got_pose_type = ''
         self.got_pose_name = ''
-        self.got_speed_scaling = 0.0
-        self.got_acc_scaling = 0.0
-        self.got_goal_tolerance = 0.001
+        self.got_speed_scaling = ''
+        self.got_acc_scaling = ''
+        self.got_goal_tolerance = ''
 
         # Main message value initializers:
         self.moving = False
@@ -127,6 +127,8 @@ class ur_pose_unidriver(transformations):
 
         # Other:
         self.prev_pose_name = ''
+        self.prev_stat_pose = ''
+
 
         # Error handler value initializers:
         self.action_method_error = ''
@@ -191,15 +193,15 @@ class ur_pose_unidriver(transformations):
             self.ricochet_msg.got_robot_name = self.robot_name
             self.ricochet_msg.got_pose_type = self.pose_type
             self.ricochet_msg.got_pose_name = self.pose_name
-            self.ricochet_msg.got_speed_scaling = self.got_speed_scaling
-            self.ricochet_msg.got_acc_scaling = self.got_acc_scaling
-            self.ricochet_msg.got_goal_tolerance = self.got_goal_tolerance
+            self.ricochet_msg.got_speed_scaling = str('%.3f' % self.speed_scaling)
+            self.ricochet_msg.got_acc_scaling = str('%.3f' % self.acc_scaling)
+            self.ricochet_msg.got_goal_tolerance = str('%.3f' % self.goal_tolerance)
 
             # Construct the whole message:
             self.main_msg.info = self.common_msg
             self.main_msg.ricochet = self.ricochet_msg
             self.main_msg.moving = self.moving
-            self.main_msg.actual_pose = self.actual_pose
+            self.main_msg.actual_pose = self.generate_current_pose()
             
             # Publish the message and sleep a bit:
             self.main_publisher.publish(self.main_msg)
@@ -330,7 +332,6 @@ class ur_pose_unidriver(transformations):
             script_str = "movej(" + str(joint_pose) + ", a=" + str(a) + ", v=" + str(v) + ", t=" + str(0) \
             + ", r=" + str(0) + ")"
             self.urScriptPublisher.publish(script_str)
-            print(name)
         else:
             self.pose_length_error = 'invalid joint pose length' 
 
@@ -341,14 +342,18 @@ class ur_pose_unidriver(transformations):
         Using the URScript API, move to a position with a linear in tool-space move.
         '''
 
+        quat_pose = []
+        tcp_pose = []
         quat_pose = self.find_pose(name, input_f)
+        print(quat_pose)
+        tcp_pose = self.quat_to_rot(quat_pose[0], quat_pose[1], quat_pose[2],
+                                    quat_pose[3], quat_pose[4], quat_pose[5], quat_pose[6])
+        
 
-        if len(quatPose) == 7:
+        if len(tcp_pose) == 6:
             self.pose_length_error = ''
-            rot = self.quat_to_rot(quatPose)
-            script_str = "movel(p" + str(rot) + ", a=" + str(a) + ", v=" + str(v) + ", t=" + str(0) + ")"
+            script_str = "movel(p" + str(tcp_pose) + ", a=" + str(a) + ", v=" + str(v) + ", t=" + str(0) + ")"
             self.urScriptPublisher.publish(script_str)
-            print(name)
         else:
             self.pose_length_error = 'invalid tcp pose length'
 
@@ -357,7 +362,11 @@ class ur_pose_unidriver(transformations):
         '''
         Using the movegroup_commander class from MoveIt, plan and execute a trajectory to a joint or a tcp pose
         '''
-        pose = self.find_pose(input_f, name)
+        pose = self.find_pose(name, input_f)
+
+        self.robot.set_max_velocity_scaling_factor(self.speed_scaling)
+        self.robot.set_max_acceleration_scaling_factor(self.acc_scaling)
+        self.robot.set_goal_tolerance(self.goal_tolerance)
 
         if pose_type == "JOINT":
             self.joints.position = pose
@@ -370,26 +379,6 @@ class ur_pose_unidriver(transformations):
         else:
             pass
 
-        # with open(input_f, 'r') as joint_csv:
-        #     joint_csv_reader = csv.reader(joint_csv, delimiter=':')
-        #     for row in joint_csv_reader:
-        #         if row[0] == name:
-        #         self.pose_name_error = ''
-        #             if pose_type == "JOINT":
-        #                 self.pose_type_error = ''
-        #                 self.joints.position = ast.literal_eval(row[1])
-        #                 self.robot.go(self.joints, wait = False)
-        #                 rospy.sleep(1)
-        #             elif pose_type == "TCP":
-        #                 self.pose_type_error = ''
-        #                 quat_pose = self.list_to_pose(ast.literal_eval(row[1]))
-        #                 self.robot.go(quat_pose, wait = False)
-        #                 rospy.sleep(1)
-        #             else:
-        #                 self.pose_type_error = 'invalid pose type: ' + pose_type
-        #         else:
-        #             self.pose_name_error = 'pose with the name ' + name + ' not saved'
-
     
     def get_static_joint_pose(self):
         '''
@@ -400,7 +389,7 @@ class ur_pose_unidriver(transformations):
 
         current_pose = self.robot.get_current_joint_values()
 
-        with open(self.joint_pose_file, 'r') as joint_csv:
+        with open(self.file_joint_input, 'r') as joint_csv:
             joint_csv_reader = csv.reader(joint_csv, delimiter=':')
             for row in joint_csv_reader:
                 saved_pose = ast.literal_eval(row[1])
@@ -423,7 +412,7 @@ class ur_pose_unidriver(transformations):
 
         current_pose = self.pose_to_list(self.robot.get_current_pose("ee_link"))
             
-        with open(self.tcp_pose_file, 'r') as tcp_csv:
+        with open(self.file_tcp_input, 'r') as tcp_csv:
             tcp_csv_reader = csv.reader(tcp_csv, delimiter=':')
             for row in tcp_csv_reader:
                 saved_pose = ast.literal_eval(row[1])
@@ -443,15 +432,20 @@ class ur_pose_unidriver(transformations):
         '''
 
         actual_pose = ''
+        actual_joint_pose = self.get_static_joint_pose()
+        actual_tcp_pose = self.get_static_tcp_pose()
 
         if self.moving == False:
-            if self.actual_joint_pose == "UNKNOWN":
-                actual_pose = self.get_static_tcp_pose()
+            if actual_joint_pose == "UNKNOWN":
+                actual_pose = actual_tcp_pose
+                self.prev_stat_pose = actual_pose
             else:
-                actual_pose = self.get_static_joint_pose()
+                actual_pose = actual_joint_pose
+                self.prev_stat_pose = actual_pose
+
         else:
             # maybe prev_prev because prev and act is equalized after cmd
-            actual_pose = 'moving from ' + self.prev_pose_name + 'to' + self.pose_name
+            actual_pose = 'moving from ' + self.prev_stat_pose + ' to ' + self.pose_name
         
         return actual_pose
 
@@ -462,7 +456,6 @@ class ur_pose_unidriver(transformations):
         '''
 
         if action_case == 0:
-            
             return self.movej(self.file_input_cases[self.pose_case],
                               self.pose_name,
                               self.acc_scaling,
@@ -502,8 +495,6 @@ class ur_pose_unidriver(transformations):
         Evaluate and consume the command message from Sequence Planner
         '''
 
-        print("got pose name" + data.pose_name)
-
         # Assigning for remote reuse
         self.action = data.action
         self.robot_name = data.robot_name
@@ -514,8 +505,15 @@ class ur_pose_unidriver(transformations):
         self.acc_scaling = data.acc_scaling
         self.goal_tolerance = data.goal_tolerance
 
+        # Check for the 'reset' flag
+        if self.pose_name == "RESET":
+            self.prev_pose_name = "RESET"
+            self.got_reset = True
+        else:
+            self.got_reset = False
+
         # Check if according robot type:
-        if self.robot_type == "UR10":
+        if self.robot_type == "UR10" and self.pose_name != "RESET":
 
             # Clearing robot type error:
             self.robot_type_error = ""
@@ -532,12 +530,6 @@ class ur_pose_unidriver(transformations):
                     # Refreshing the message and restarting the stopwatch
                     self.callback_timeout = time.time() + self.message_freshness
                     self.timer_start()
-
-                    # Check for the 'reset' flag
-                    if self.pose_name == "reset":
-                        self.prev_pose_name = "reset"
-                    else:
-                        pass
 
                     # Pose type switching
                     if self.pose_type in self.pose_type_cases:
