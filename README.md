@@ -14,7 +14,7 @@
 - TODO: List dependancies
 - TODO: Add dependancies in a bash script for easier installation
 
-Get yourself a robot:\
+### Get yourself a robot
 1.  Official UR simulated robot (recommended for Ubuntu 16.04):\
 Get the official UR simulator from: https://www.universal-robots.com/download/ and extract the folder somewhere convenient. Start the simulator by following the instrucions on the UR website. As MoveIt! seems to have difficulties with finding plans for the UR with full joint limits [-2pi, 2pi], it is recommended to restrict the robot's joints within the range of [-pi, pi] and that limitation is set to default for the moveit planning execution in the wake_up.launch file. The joint limits should also be set to [-pi, pi] in the official UR simulator because that will disallow the robot to move outside of those joint limits within the simulator itself, so forcing the robot outside of those bounds will result in Protective Stop. It is recommended to use the official simulator since you will have the capability to send URScript commands and do some other things.
 
@@ -37,29 +37,44 @@ A few nodes exist in this package that aim to enable and in the same time simpli
 
 ### ur_pose_updater
 
-![Alt text](https://g.gravizo.com/svg?
-  digraph G {
-    size ="4,4";
-    UR10 -> TARS;
-    UR10 -> KIPP;
-    UR10 -> CASE;
-    IIWA7 -> PLEX;
-    TARS -> JOINT;
-    TARS -> TCP;
-    KIPP -> JOINT;
-    KIPP -> TCP;
-    CASE -> JOINT;
-    CASE -> TCP;
-    PLEX -> JOINT;
-    PLEX -> TCP;
-    TCP -> UPDATE;
-    TCP -> DELETE;
-    TCP -> CLEAR;
-    JOINT -> UPDATE;
-    JOINT -> DELETE;
-    JOINT -> CLEAR;
-  }
-)
+Allows the user to save robot poses by sending messages to this node. The poses are saved in according csv files and can be later looked up by other nodes.
+- Support for pose manipu;ation: UPDATE, DELETE and CLEAR
+- UPDATE: if pose name is not existing, append to specified pose list
+- UPDATE: if pose name existing in the pose list, update with new values
+- DELETE: if pose name is not existing, skip with error msg
+- UPDATE: if pose name existing in the pose list, remove pose from the list
+- CLEAR: if pose name and type specified, clear the whole pose list, leave the 'control_pose'
+- CLEAR: if pose name or type not existing, skip with error mmsg (safety feature)
+
+An example message that this node consumes:
+```
+action: 'UPDATE'
+robot_type: 'UR10'
+robot_name: 'TARS'
+pose_type: 'JOINT'
+pose_name: 'POSE1'
+```
+
+An example message that the node publishes, for example after receiving the message above:
+```
+info: 
+  robot_name: "TARS"
+  fresh_msg: True
+  t_plus: "2.9 seconds"
+  got_reset: False
+  error_list: []
+ricochet: 
+  got_action: "UPDATE"
+  got_pose_type: "JOINT"
+  got_pose_name: "POSE1"
+  got_robot_type: "UR10"
+  got_robot_name: "TARS"
+saved_poses: 
+  joint_pose_list: [control_pose, POSE1]
+  tcp_pose_list: [control_pose]
+last_completed_action: "appended: POSE1 to JOINT list"
+```
+
 
 
 ## STATUS
