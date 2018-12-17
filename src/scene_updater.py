@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 
-#----------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------------------------------#
 # authors, description, version
-#----------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------------------------------#
     # Endre Eres
     # Unification Scene Updater
     # V.0.9.8. alpha
-#----------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------------------------------#
 
 import rospy
 import roslib
@@ -45,7 +45,8 @@ class scene_updater(transformations):
       
         # Subscribers and Publishers:
         rospy.Subscriber("/unification_roscontrol/scene_updater_sp_to_uni", SceneUpdaterSPToUni, self.sp_callback)
-        self.main_publisher = rospy.Publisher("unification_roscontrol/scene_updater_uni_to_sp", SceneUpdaterUniToSP, queue_size=10)
+        self.main_publisher = rospy.Publisher("unification_roscontrol/scene_updater_uni_to_sp", \
+                              SceneUpdaterUniToSP, queue_size=10)
 
         # ROS package localizer:
         self.rospack = rospkg.RosPack()
@@ -57,7 +58,8 @@ class scene_updater(transformations):
         self.ts_tool_mesh = self.rospack.get_path('ros1_unification_2019') + '/unstruct_ptcl_meshes/tstool.stl'
 
         # UR10 link idenifiers:
-        self.ur10_links = ['base_link', 'shoulder_link', 'elbow_link', 'wrist_1_link', 'wrist_2_link', 'wrist_3_link', 'tool0', 'ee_link']
+        self.ur10_links = ['base_link', 'shoulder_link', 'elbow_link', 'wrist_1_link', '
+                            'wrist_2_link', 'wrist_3_link', 'tool0', 'ee_link']
 
         # Switcher lists of cases for implementing a switch-case like behavior:
         self.object_action_cases = ['ADD', 'REMOVE', 'MOVE', 'CLEAR', 'ATTACH', 'DETACH']
