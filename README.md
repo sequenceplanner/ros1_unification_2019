@@ -1,3 +1,5 @@
+### NOTE: Things in this README might not be true if you can see this message
+
 # ros1_unification_2019
 
 - Package for the ROS1 part of the Unification project for 2019
@@ -149,7 +151,7 @@ object_poses: [{"ENGINE":[2, 2, 2, 1.5707, 0, -1.5707]}]
  
 ### ur_transformations
 
-Provides transformation method if needed
+Provides transformation methods if needed
 
 ### robotiq_unidriver
 
