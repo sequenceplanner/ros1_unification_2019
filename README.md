@@ -39,12 +39,13 @@ A few nodes exist in this package that aim to enable and in the same time simpli
 
 ### ur_pose_updater
 
+TODO: some testing
 Allows the user to save robot poses by sending messages to this node. The poses are saved in according csv files and can be later looked up by other nodes.
 - Support for pose manipulation: UPDATE, DELETE and CLEAR
 - UPDATE: if pose name is not existing, append to specified pose list
 - UPDATE: if pose name existing in the pose list, update with new values
 - DELETE: if pose name is not existing, skip with error msg
-- UPDATE: if pose name existing in the pose list, remove pose from the list
+- DELETE: if pose name existing in the pose list, remove pose from the list
 - CLEAR: if pose name and type specified, clear the whole pose list, leave the 'control_pose'
 - CLEAR: if pose name or type not specified, skip with error mmsg (safety feature)
 
@@ -80,6 +81,7 @@ The info part of the published message contains the name of the robot which pose
 
 ### ur_pose_unidriver
 
+TODO: some testing
 Allows the user to move the robot around with planning using MoveIt, or without planning using URScript(UR robots only).
 - Support for pose manipulation: MOVEJ, MOVEL and PLANNED
 - MOVEJ: move the manipulator in a linear joint-space move
@@ -123,6 +125,8 @@ The info part of the published message contains the name of the robot which pose
 
 ### scene_updater
 
+TODO: make it work
+TODO: afterwards, some testing
 Allows the user to manipulate the planning scene by adding, attaching and removing collision objects in the scene. This is done using the planning scene interface from moveit commander. 
 - Support for object manipulation: ADD, REMOVE, MOVE, CLEAR, ATTACH and DETACH
 
@@ -151,7 +155,7 @@ object_poses: [{"ENGINE":[2, 2, 2, 1.5707, 0, -1.5707]}]
  
 ### ur_transformations
 
-Provides transformation methods if needed
+Not really a node, but a class that provides transformation methods if needed
 
 ### robotiq_unidriver
 
