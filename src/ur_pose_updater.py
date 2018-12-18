@@ -426,7 +426,7 @@ class ur_pose_updater():
             self.got_reset = False
 
         # Check if according robot type:
-        if self.robot_type == "UR10":
+        if self.robot_type == "UR10" and self.pose_name != "RESET":
 
             # Clearing robot type error:
             self.robot_type_error = ""

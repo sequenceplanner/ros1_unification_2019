@@ -4,7 +4,7 @@
 
 - Package for the ROS1 part of the Unification project for 2019
 - Support for UR10 robots: TARS, KIPP and CASE
-- TODO: Support for IIWA7 robot: PLEX
+TODO: Support for IIWA7 robot: PLEX\
 
 ## Prerequisites
 
@@ -13,8 +13,8 @@
 3.  https://github.com/ros-industrial/ur_modern_driver
 4.  http://wiki.ros.org/timed_roslaunch
 
-- TODO: List dependancies
-- TODO: Add dependancies in a bash script for easier installation
+TODO: List dependancies\
+TODO: Add dependancies in a bash script for easier installation\
 
 ### Get yourself a robot
 1.  Official UR simulated robot (recommended for Ubuntu 16.04):\
@@ -39,7 +39,7 @@ A few nodes exist in this package that aim to enable and in the same time simpli
 
 ### ur_pose_updater
 
-TODO: some testing
+TODO: some testing\
 Allows the user to save robot poses by sending messages to this node. The poses are saved in according csv files and can be later looked up by other nodes.
 - Support for pose manipulation: UPDATE, DELETE and CLEAR
 - UPDATE: if pose name is not existing, append to specified pose list
@@ -81,7 +81,7 @@ The info part of the published message contains the name of the robot which pose
 
 ### ur_pose_unidriver
 
-TODO: some testing
+TODO: some testing\
 Allows the user to move the robot around with planning using MoveIt, or without planning using URScript(UR robots only).
 - Support for pose manipulation: MOVEJ, MOVEL and PLANNED
 - MOVEJ: move the manipulator in a linear joint-space move
@@ -125,8 +125,8 @@ The info part of the published message contains the name of the robot which pose
 
 ### scene_updater
 
-TODO: make it work
-TODO: afterwards, some testing
+TODO: make it work, euler pose is part a bit iffy\
+TODO: afterwards, some testing\
 Allows the user to manipulate the planning scene by adding, attaching and removing collision objects in the scene. This is done using the planning scene interface from moveit commander. 
 - Support for object manipulation: ADD, REMOVE, MOVE, CLEAR, ATTACH and DETACH
 
