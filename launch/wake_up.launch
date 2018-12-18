@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+
+<launch>
+
+  <arg name="robot_ip" default="0.0.0.0"/>
+  <arg name="robot_name" default="TARS"/>
+  <arg name="limited" default="true"/>
+  <arg name="config" default="true"/>
+
+
+  <param name="robot_name" value="$(arg robot_name)"/>
+  <node pkg="ros1_unification_2019" name="ur_$(arg robot_name)_pose_updater" type="ur_pose_updater.py">  
+  </node>
+  <node pkg="ros1_unification_2019" name="ur_$(arg robot_name)_pose_unidriver" type="ur_pose_unidriver.py">  
+  </node>
+
+  <include file="$(find ros1_unification_2019)/launch/ur10_unification_bringup_joint_limited.launch" >
+    <arg name="robot_ip" value="$(arg robot_ip)"/>
+  </include>
+
+  <include file="$(find ur10_moveit_config)/launch/ur10_moveit_planning_execution.launch" >
+    <arg name="limited" value="$(arg limited)"/>
+  </include>
+
+  <include file="$(find ur10_moveit_config)/launch/moveit_rviz.launch" >
+    <arg name="config" value="$(arg config)"/>
+  </include>
+
+</launch>
