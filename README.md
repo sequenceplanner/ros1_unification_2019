@@ -2,9 +2,15 @@
 
 # ros1_unification_2019
 
+README Contents:
+1.  Prerequisites
+2.  Get yourself a robot
+3.  Nodes
+4.  Known Issues
+
 - Package for the ROS1 part of the Unification project for 2019
-- Support for UR10 robots: TARS, KIPP and CASE
-TODO: Support for IIWA7 robot: PLEX\
+- Support for UR10 robots: TARS, KIPP and CASE\
+TODO: Support for IIWA7 robot: PLEX
 
 ## Prerequisites
 
@@ -14,9 +20,9 @@ TODO: Support for IIWA7 robot: PLEX\
 4.  http://wiki.ros.org/timed_roslaunch
 
 TODO: List dependancies\
-TODO: Add dependancies in a bash script for easier installation\
+TODO: Add dependancies in a bash script for easier installation
 
-### Get yourself a robot
+## Get yourself a robot
 1.  Official UR simulated robot (recommended for Ubuntu 16.04):\
 Get the official UR simulator from: https://www.universal-robots.com/download/ and extract the folder somewhere convenient. Start the simulator by following the instrucions on the UR website. As MoveIt! seems to have difficulties with finding plans for the UR with full joint limits [-2pi, 2pi], it is recommended to restrict the robot's joints within the range of [-pi, pi] and that limitation is set to default for the moveit planning execution in the wake_up.launch file. The joint limits should also be set to [-pi, pi] in the official UR simulator because that will disallow the robot to move outside of those joint limits within the simulator itself, so forcing the robot outside of those bounds will result in Protective Stop. It is recommended to use the official simulator since you will have the capability to send URScript commands and do some other things.
 
@@ -160,3 +166,14 @@ Not really a node, but a class that provides transformation methods if needed
 ### robotiq_unidriver
 
 Communication with the Robotiq gripper
+
+## Known Issues
+
+At least on Ubuntu 16.04, using ROS Kinetic, installing MoveIt with:
+```
+sudo apt install ros-kinetic-moveit
+```
+will install also the version 3.2 of Python Asset Importer (python-pyassimp) which is for some reason buggy and won't import your meshes properly. To avoid this, make sure that you have all python-pyassimp uninstalled with:
+```
+sudo apt remove python-pyassimp
+```

@@ -26,4 +26,7 @@
     <arg name="config" value="$(arg config)"/>
   </include>
 
+  <!-- For visualization in IPS 
+  <include file="$(find ips_state_collector)/launch/test.launch" />
+  -->
 </launch>

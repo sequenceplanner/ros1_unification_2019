@@ -14,7 +14,7 @@ import rospkg
 import time
 import sys
 import os
-import csv
+from geometry_msgs.msg import PoseStamped
 from moveit_commander import MoveGroupCommander as mgc
 from moveit_commander import PlanningSceneInterface as psi
 from moveit_commander import roscpp_initialize, roscpp_shutdown
@@ -52,24 +52,31 @@ class scene_updater(transformations):
         self.rospack = rospkg.RosPack()
 
         # Stl mesh destinations:
-        self.lf_mesh = self.rospack.get_path('ros1_unification_2019') + '/cad_meshes/LF.stl'
-        self.engine_mesh = self.rospack.get_path('ros1_unification_2019') + '/cad_meshes/engine_reduced.stl'
-        self.agv_mesh = self.rospack.get_path('ros1_unification_2019') + '/cad_meshes/AGV.stl'
-        self.ts_tool_mesh = self.rospack.get_path('ros1_unification_2019') + '/unstruct_ptcl_meshes/tstool.stl'
+        self.lf_mesh = self.rospack.get_path('ros1_unification_2019') + '/description/cad_meshes/LF.stl'
+        self.engine_mesh = self.rospack.get_path('ros1_unification_2019') + '/description/cad_meshes/engine_reduced.stl'
+        self.agv_mesh = self.rospack.get_path('ros1_unification_2019') + '/description/cad_meshes/AGV.stl'
+        self.ts_tool_mesh = self.rospack.get_path('ros1_unification_2019') + '/description/unstruct_ptcl_meshes/tstool.stl'
+        self.of_tool_mesh = self.rospack.get_path('ros1_unification_2019') + '/description/cad_meshes/OFTool.stl'
 
         # UR10 link idenifiers:
-        self.ur10_links = ['base_link', 'shoulder_link', 'elbow_link', 'wrist_1_link', '
+        self.ur10_links = ['base_link', 'shoulder_link', 'elbow_link', 'wrist_1_link',
                             'wrist_2_link', 'wrist_3_link', 'tool0', 'ee_link']
 
         # Switcher lists of cases for implementing a switch-case like behavior:
+        self.robot_type_cases = ['UR10', 'IIWA7']
+        self.ur10_robot_name_cases = ['TARS', 'KIPP', 'CASE']
+        self.iiwa7_robot_name_cases = ['PLEX']
+        self.all_robot_names = self.ur10_robot_name_cases + self.iiwa7_robot_name_cases
         self.object_action_cases = ['ADD', 'REMOVE', 'MOVE', 'CLEAR', 'ATTACH', 'DETACH']
-        self.object_name_cases = ['LF', 'TSTOOL', 'AGV', 'ENGINE'] # Gradually add more...
-        self.object_file_cases = [self.lf_mesh, self.ts_tool_mesh, self.agv_mesh, self.engine_mesh]
+        self.object_name_cases = ['LF', 'TSTOOL', 'AGV', 'ENGINE', 'OFTOOL'] # Gradually add more...
+        self.object_file_cases = [self.lf_mesh, self.ts_tool_mesh, self.agv_mesh, self.engine_mesh, self.of_tool_mesh]
 
         # Message freshness definition in seconds:
         self.message_freshness = 3
 
         # Message type initializers:
+        self.pose = PoseStamped()
+        boxpose = PoseStamped()
         self.main_msg = SceneUpdaterUniToSP()
         self.obj_msg = PsiObjectPose()
         self.common_msg = Common()
@@ -91,7 +98,7 @@ class scene_updater(transformations):
         self.scene_object_name = ''
         self.scene_object_pose = []
 
-        #SceneUpdaterSPToUni message value initializers:
+        # SceneUpdaterSPToUni message value initializers:
         self.object_action = ''
         self.object_name = ''
         self.euler_pose = []
@@ -114,6 +121,25 @@ class scene_updater(transformations):
         # Some time to assure initialization:
         rospy.sleep(3)
 
+        #file, name, pose
+        #self.add_object(self.of_tool_mesh, 'OFTOOL', [0, 0.5, 0.8, 1.5707, 3.1415, 0])
+
+        boxpose.header.frame_id = "world"
+        boxpose.pose.position.x = 0.15115
+        boxpose.pose.position.y = -0.661048
+        boxpose.pose.position.z = 2.4475
+        boxpose.pose.orientation.x = 0.484524
+        boxpose.pose.orientation.y = 0.515012
+        boxpose.pose.orientation.z = -0.484524
+        boxpose.pose.orientation.w = 0.515012
+
+        self.scene.add_box("box1", boxpose, size = (0.1, 0.1, 0.25))
+        #add_box(self, name, pose, size = (1, 1, 1)):
+        self.add_object(self.engine_mesh, 'ENGINE', [0, 0.5, 0.8, 1.5707, 3.1415, 0])
+        time.sleep(2)
+        self.attach_object("box1", "ee_link")
+        #print(self.scene.get_attached_objects())
+
         # Main loop method call:
         self.main()
 
@@ -125,8 +151,6 @@ class scene_updater(transformations):
         main publisher topic.
 
         '''
-
-        print(self.scene.get_attached_objects())
 
         while not rospy.is_shutdown():
 
@@ -210,7 +234,7 @@ class scene_updater(transformations):
         return object_list
 
     
-    def add_object(self, file, name, pose):
+    def add_object(self, obj_file, name, pose):
         '''
         Add a collision object to the planning scene from
         the list of object name cases
@@ -220,16 +244,16 @@ class scene_updater(transformations):
 
             quat = self.rpy_to_quat(pose[0], pose[1], pose[2], pose[3], pose[4], pose[5])
 
-            scene_pose.header.frame_id = "world"
-            scene_pose.pose.position.x = quat[0]
-            scene_pose.pose.position.y = quat[1]
-            scene_pose.pose.position.z = quat[2]
-            scene_pose.pose.orientation.x = quat[3]
-            scene_pose.pose.orientation.y = quat[4]
-            scene_pose.pose.orientation.z = quat[5]
-            scene_pose.pose.orientation.w = quat[6]
+            self.pose.header.frame_id = "world"
+            self.pose.pose.position.x = quat[0]
+            self.pose.pose.position.y = quat[1]
+            self.pose.pose.position.z = quat[2]
+            self.pose.pose.orientation.x = quat[3]
+            self.pose.pose.orientation.y = quat[4]
+            self.pose.pose.orientation.z = quat[5]
+            self.pose.pose.orientation.w = quat[6]
 
-            self.scene.add_mesh(name, quat, file, (1, 1, 1))
+            self.scene.add_mesh(name, self.pose, obj_file, (0.01, 0.01, 0.01))
             self.error = "none"
 
         elif name != '' and name not in self.object_name_cases:
@@ -254,13 +278,13 @@ class scene_updater(transformations):
             pass
 
     
-    def move_object(self, file, name, pose):
+    def move_object(self, obj_file, name, pose):
         '''
         Move and existing object in the scene to a noew pose
         '''
 
-        self.scene.remove_object(file, name)
-        self.add_object(file, name, pose)
+        self.scene.remove_object(obj_file, name)
+        self.add_object(obj_file, name, pose)
 
 
     def clear_scene(self):
@@ -276,15 +300,15 @@ class scene_updater(transformations):
         Attach a collision object to a specified link
         '''
 
-        if name in list(self.get_objects()) and link in self.links:
-            self.robot.attach_object(name, link)
-            self.error = "none"
-        elif name in list(self.get_objects()) and not link in self.ur10_links:
-            self.error = "Link named: " + link + " not valid."
-        elif name not in list(self.get_objects()):
-            self.error = "Object named: " + name + "not valid."
-        else:
-            pass
+        #if name in list(self.get_objects()) and link in self.links:
+        self.robot.attach_object(name, link)
+            # self.error = "none"
+        # elif name in list(self.get_objects()) and not link in self.ur10_links:
+            # self.error = "Link named: " + link + " not valid."
+        # elif name not in list(self.get_objects()):
+            # self.error = "Object named: " + name + "not valid."
+        # else:
+            # pass
 
     
     def detach_object(self, name):

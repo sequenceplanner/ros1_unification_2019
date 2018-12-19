@@ -15,6 +15,7 @@ import time
 import sys
 import os
 import csv
+import tf
 from moveit_commander import MoveGroupCommander as mgc
 from moveit_commander import roscpp_initialize, roscpp_shutdown
 from ros1_unification_2019.msg import Common
@@ -130,6 +131,8 @@ class ur_pose_updater():
        
         # Some time to assure initialization:
         rospy.sleep(3)
+
+        #print(self.scene.get_planning_scene)
 
         # Check if Robot Name argument is correct:
         if self.robot_name_param in self.ur10_robot_name_cases:
@@ -401,6 +404,11 @@ class ur_pose_updater():
         if pose_case == 0:
             return self.robot.get_current_joint_values()
         elif pose_case == 1:
+            print(self.robot.get_pose_reference_frame())
+            self.robot.set_pose_reference_frame("/ENGINE")
+            engine_pose = self.scene.get_object_poses("/ENGINE")
+            print(engine_pose)
+            print(self.robot.get_pose_reference_frame())
             return self.pose_to_list(self.robot.get_current_pose("ee_link"))
         else:
             pass

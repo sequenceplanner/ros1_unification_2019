@@ -16,6 +16,7 @@ import ast
 import sys
 import time
 import csv
+import tf
 from std_msgs.msg import String
 from geometry_msgs.msg import Pose
 from geometry_msgs.msg import PoseStamped
@@ -27,7 +28,6 @@ from ros1_unification_2019.msg import Common
 from ros1_unification_2019.msg import URPoseSPToUni
 from ros1_unification_2019.msg import URPoseSPToUniRicochet as Ricochet
 from ros1_unification_2019.msg import URPoseUniToSP
-
 
 class ur_pose_unidriver(transformations):
     '''
@@ -66,6 +66,9 @@ class ur_pose_unidriver(transformations):
         self.file_tcp_input = self.rospack.get_path('ros1_unification_2019') + '/poses/ur_' \
                                                                              + self.robot_name_param \
                                                                              + '_tcp_poses.csv'
+
+        # Init tf listener
+        self.tf_listener = tf.TransformListener()
         
         # Switcher lists of cases for implementing a switch-case like behavior:
         self.robot_type_cases = ['UR10', 'IIWA7']
@@ -368,12 +371,21 @@ class ur_pose_unidriver(transformations):
         self.robot.set_max_acceleration_scaling_factor(self.acc_scaling)
         self.robot.set_goal_tolerance(self.goal_tolerance)
 
+
         if pose_type == "JOINT":
             self.joints.position = pose
             self.robot.go(self.joints, wait = False)
             rospy.sleep(1)
         elif pose_type == "TCP":
             quat_pose = self.list_to_pose(pose)
+
+            #(self.trans, self.rot) = self.tf_listener.lookupTransform('/world', '/ENGINE', rospy.Time(0))
+            #engineInWorld=fromTranslationRotation(self.trans, self.rot)
+            #goalInInEngine=fromTranslationRotation(quat_pose.position, quat_pose.orientation)
+
+            #print(engineInWorld*goalInInEngine)
+
+            #self.rot_vec = self.trans.append
             self.robot.go(quat_pose, wait = False)
             rospy.sleep(1)
         else:
