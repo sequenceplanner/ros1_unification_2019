@@ -5,7 +5,7 @@
 #----------------------------------------------------------------------------------------------------------------------#
     # Endre Eres
     # UR Pose Unification Driver
-    # V.0.9.9. beta
+    # V.1.2.0.
 #----------------------------------------------------------------------------------------------------------------------#
 
 import rospy
@@ -32,7 +32,10 @@ from ros1_unification_2019.msg import URPoseUniToSP
 class ur_pose_unidriver(transformations):
     '''
     Moving the UR10 robot to the demanded poses that are saved in according csv files.On the local roshub, one robot 
-    should be defined and in the multirobot scenario unique robot names should be used.
+    should be defined and in the multirobot scenario unique robot names should be used. NEW IN 1.2.0.: Since getting
+    the current actual pose from moveit_commander is very slow, saving poses should be done in both JOINT and TCP
+    spaces so that act pose comparisson can be done only in JOINT space. TODO: add support for urscript:movel to 
+    joint pose and movej to tcp pose. 
     '''
 
     def __init__(self):
@@ -68,7 +71,7 @@ class ur_pose_unidriver(transformations):
                                                                              + '_tcp_poses.csv'
 
         # Init tf listener
-        self.tf_listener = tf.TransformListener()
+        # self.tf_listener = tf.TransformListener()
         
         # Switcher lists of cases for implementing a switch-case like behavior:
         self.robot_type_cases = ['UR10', 'IIWA7']
@@ -131,7 +134,7 @@ class ur_pose_unidriver(transformations):
         # Other:
         self.prev_pose_name = ''
         self.prev_stat_pose = ''
-
+        self.joint_pose = []
 
         # Error handler value initializers:
         self.action_method_error = ''
@@ -140,6 +143,17 @@ class ur_pose_unidriver(transformations):
         self.pose_type_error = ''
         self.pose_name_error = ''
         self.pose_length_error = ''
+
+         # Tick inhibitor:
+        self.tick_inhibited = False
+        self.prev_action = ''
+        self.prev_robot_name = ''
+        self.prev_robot_type = ''
+        self.prev_pose_type = ''
+        self.prev_pose_name = ''
+        self.prev_speed_scaling = 0.0
+        self.prev_acc_scaling = 0.0
+        self.prev_goal_tolerance = 0.0
 
         # Robot joint identifiers:
         self.joints.name = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint', \
@@ -204,7 +218,7 @@ class ur_pose_unidriver(transformations):
             self.main_msg.info = self.common_msg
             self.main_msg.ricochet = self.ricochet_msg
             self.main_msg.moving = self.moving
-            self.main_msg.actual_pose = self.generate_current_pose()
+            self.main_msg.actual_pose = self.get_static_joint_pose()
             
             # Publish the message and sleep a bit:
             self.main_publisher.publish(self.main_msg)
@@ -320,6 +334,7 @@ class ur_pose_unidriver(transformations):
             return pose
         else:
             self.pose_name_error = 'pose with the name ' + name + ' not saved'
+            return []
 
 
     def movej(self, input_f, name, a, v):
@@ -348,17 +363,17 @@ class ur_pose_unidriver(transformations):
         quat_pose = []
         tcp_pose = []
         quat_pose = self.find_pose(name, input_f)
-        print(quat_pose)
-        tcp_pose = self.quat_to_rot(quat_pose[0], quat_pose[1], quat_pose[2],
-                                    quat_pose[3], quat_pose[4], quat_pose[5], quat_pose[6])
-        
-
-        if len(tcp_pose) == 6:
-            self.pose_length_error = ''
-            script_str = "movel(p" + str(tcp_pose) + ", a=" + str(a) + ", v=" + str(v) + ", t=" + str(0) + ")"
-            self.urScriptPublisher.publish(script_str)
+                
+        if quat_pose != []:
+            tcp_pose = self.quat_to_rot(quat_pose[0], quat_pose[1], quat_pose[2],quat_pose[3], quat_pose[4], quat_pose[5], quat_pose[6])
+            if len(tcp_pose) == 6:
+                self.pose_length_error = ''
+                script_str = "movel(p" + str(tcp_pose) + ", a=" + str(a) + ", v=" + str(v) + ", t=" + str(0) + ")"
+                self.urScriptPublisher.publish(script_str)
+            else:
+                self.pose_length_error = 'invalid tcp pose length'
         else:
-            self.pose_length_error = 'invalid tcp pose length'
+            self.pose_name_error = 'pose with the name ' + name + ' not saved'
 
     
     def planned_move(self, input_f, name, pose_type, a, v):
@@ -396,10 +411,12 @@ class ur_pose_unidriver(transformations):
         '''
         While all joint velocities are 0, compare current robot joint pose with saved poses in the joint_csv file
         and return the name of the saved pose if they match with a tolerance, else return unknown as the 
-        current joint pose.
+        current joint pose. Using joint_callback because it is very slow to get_current_joint_values via 
+        moveit_commander according to KCacheGrind.
         '''
 
-        current_pose = self.robot.get_current_joint_values()
+        # Very slow: current_pose = self.robot.get_current_joint_values()
+        current_pose = self.joint_pose
 
         with open(self.file_joint_input, 'r') as joint_csv:
             joint_csv_reader = csv.reader(joint_csv, delimiter=':')
@@ -419,7 +436,7 @@ class ur_pose_unidriver(transformations):
         '''
         While all joint velocities are 0, compare current robot tcp pose with saved poses in the tcp_csv file
         and return the name of the saved pose if they match with a tolerance, else return unknown as the 
-        current tcp pose.
+        current tcp pose. NOT USED CURRENTLY.
         '''
 
         current_pose = self.pose_to_list(self.robot.get_current_pose("ee_link"))
@@ -440,7 +457,7 @@ class ur_pose_unidriver(transformations):
 
     def generate_current_pose(self):
         '''
-        add comment here...
+        NOT USED CURRENTLY. 
         '''
 
         actual_pose = ''
@@ -501,6 +518,22 @@ class ur_pose_unidriver(transformations):
         else:
             pass
 
+    
+    def inhibit_tick(self):
+        '''
+        Check if two successive messages are the same and disallow consumption if True.
+        This method assigns values to the previous message variables so that they can be compared later.
+        '''
+
+        self.prev_action = self.action
+        self.prev_robot_name = self.robot_name
+        self.prev_robot_type = self.robot_type
+        self.prev_pose_type = self.pose_type
+        self.prev_pose_name = self.pose_name
+        self.prev_speed_scaling = self.speed_scaling
+        self.prev_acc_scaling = self.acc_scaling
+        self.prev_goal_tolerance = self.goal_tolerance
+
 
     def sp_callback(self, data):
         '''
@@ -516,6 +549,19 @@ class ur_pose_unidriver(transformations):
         self.speed_scaling = data.speed_scaling
         self.acc_scaling = data.acc_scaling
         self.goal_tolerance = data.goal_tolerance
+
+        # Tick inhibitor msg check:
+        if self.action == self.prev_action and \
+           self.robot_name == self.prev_robot_name and \
+           self.robot_type == self.prev_robot_type and \
+           self.pose_type == self.prev_pose_type and \
+           self.pose_name == self.prev_pose_name and \
+           self.speed_scaling == self.prev_speed_scaling and \
+           self.acc_scaling == self.prev_acc_scaling and \
+           self.goal_tolerance == self.prev_goal_tolerance:
+            self.tick_inhibited = True
+        else:
+            self.tick_inhibited = False
 
         # Check for the 'reset' flag
         if self.pose_name == "RESET":
@@ -558,9 +604,9 @@ class ur_pose_unidriver(transformations):
                         self.action_method_switch_error = "action: " + self.action + " not valid"
 
                     # Evaluate messages only once and use the 'reset' flag if stuck
-                    if self.pose_name != self.prev_pose_name:
+                    if self.tick_inhibited == False:
                         if self.action_method_switch_error == "" and self.pose_type_switch_error == "":
-                            self.prev_pose_name = self.pose_name
+                            self.inhibit_tick()
                             self.action_method_switch(self.action_case)
                         else:
                             pass
@@ -598,10 +644,16 @@ class ur_pose_unidriver(transformations):
         Check if the arm is moving and aid in transport pose generation
         '''
 
-        if all(joint.velocity[i] == 0 for i in range(0, 5, 1)):
-            self.moving = False
+        self.joint_pose = joint.position
+
+
+        if len(joint.velocity) != 0:
+            if all(joint.velocity[i] == 0 for i in range(0, 5, 1)):
+                self.moving = False
+            else:
+                self.moving = True
         else:
-            self.moving = True
+            self.moving = False
 
 
 if __name__ == '__main__':

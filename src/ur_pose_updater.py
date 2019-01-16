@@ -29,6 +29,8 @@ class ur_pose_updater():
     '''
     Updating the Robot poses and saving them in according csv files. These poses can be later fetched by other nodes. 
     On the local roshub, one robot should be defined and in the multirobot scenario unique robot names should be used.
+    Since getting the current actual pose from moveit_commander is very slow, saving poses should be done in both 
+    JOINT and TCP spaces so that act pose comparisson can be done only in JOINT space.
     '''
 
     def __init__(self):
@@ -103,36 +105,50 @@ class ur_pose_updater():
         self.callback_timeout = time.time()
         self.start = time.time()
 
-        # Message value initializers:
+        # Common message value initializers:
+        self.robot_name = ''
         self.fresh_msg = False
         self.t_plus = ''
         self.got_reset = False
         self.error_list = []
-        self.pose_name = ''
-        self.prev_pose_name = ''
-        self.robot_type = ''
-        self.pose_type = ''
+
+        # Saved poses message value initializers:
+        self.joint_pose_list = []
+        self.tcp_pose_list = []
+
+        # Pose updater command mesage value initializers:
         self.action = ''
-        self.done_action = ''
+        self.robot_type = ''
         self.robot_name = ''
-        self.got_pose_name = ''
-        self.got_pose_type = ''
-        self.got_robot_type = ''
+        self.pose_name = ''
+
+        # Command ricochet message value initializers:
         self.got_action = ''
+        self.got_robot_type = ''
+        self.got_robot_name = ''
+        self.got_pose_name = ''
+
+        # Pose updater state message value initializers:
+        self.last_completed_action = ''
 
         # Error handler value Initializers:
         self.action_method_error = ''
-        self.pose_type_error = ''
         self.robot_type_error = ''
         self.robot_name_error = ''
+        self.pose_name_error = ''
         
         # Publisher rates:
         self.main_pub_rate = rospy.Rate(10)
+
+        # Tick inhibitor:
+        self.tick_inhibited = False
+        self.prev_action = ''
+        self.prev_robot_name = ''
+        self.prev_robot_type = ''
+        self.prev_pose_name = ''
        
         # Some time to assure initialization:
         rospy.sleep(3)
-
-        #print(self.scene.get_planning_scene)
 
         # Check if Robot Name argument is correct:
         if self.robot_name_param in self.ur10_robot_name_cases:
@@ -171,7 +187,6 @@ class ur_pose_updater():
             self.ricochet_msg.got_action = self.action
             self.ricochet_msg.got_robot_type = self.robot_type
             self.ricochet_msg.got_robot_name = self.robot_name
-            self.ricochet_msg.got_pose_type = self.pose_type
             self.ricochet_msg.got_pose_name = self.pose_name
 
             # Construct saved poses message part:
@@ -182,7 +197,7 @@ class ur_pose_updater():
             self.main_msg.info = self.common_msg
             self.main_msg.ricochet = self.ricochet_msg
             self.main_msg.saved_poses = self.poses_msg
-            self.main_msg.last_completed_action = self.done_action
+            self.main_msg.last_completed_action = self.last_completed_action
             
             # Publish the message and sleep a bit:
             self.main_publisher.publish(self.main_msg)
@@ -228,7 +243,7 @@ class ur_pose_updater():
 
         error_list = []
         potential_error_list = [self.action_method_error,
-                                self.pose_type_error,
+                                self.pose_name_error,
                                 self.robot_type_error,
                                 self.robot_name_error]
 
@@ -262,9 +277,9 @@ class ur_pose_updater():
         return pose_list
 
 
-    def delete_pose(self, input_f, newpose_f, pose_name, pose_type):
+    def delete_pose(self, input_f, newpose_f, pose_name):
         '''
-        Delete one pose from a pose list.
+        Delete one pose from pose lists.
         '''
         
         with open(input_f, "rb") as f_in, open(newpose_f, "wb") as f_np:
@@ -277,12 +292,12 @@ class ur_pose_updater():
         
         os.remove(input_f)
         os.rename(newpose_f, input_f)
-        self.done_action = 'deleted: ' + str(pose_name) + ' from ' + str(pose_type) + ' list'
+        self.last_completed_action = 'deleted: ' + str(pose_name)
 
 
-    def clear_pose_list(self, input_f, newpose_f, pose_type):
+    def clear_pose_list(self, input_f, newpose_f):
         '''
-        Delete all poses from a pose list.
+        Delete all poses from pose lists.
         '''
         
         with open(input_f, "rb") as f_in, open(newpose_f, "wb") as f_np:
@@ -295,10 +310,10 @@ class ur_pose_updater():
 
         os.remove(input_f)
         os.rename(newpose_f, input_f)
-        self.done_action = 'cleared: ' + str(pose_type) + ' list'
+        self.last_completed_action = 'pose lists cleared'
 
 
-    def update_pose_list(self, input_f, oldpose_f, newpose_f, name, pose_type, function):
+    def update_pose_list(self, input_f, oldpose_f, newpose_f, name, function):
         '''
         Update a pose list by appending a new pose or updating an existing one.
         '''
@@ -307,10 +322,10 @@ class ur_pose_updater():
             csv_reader = csv.reader(csv_read, delimiter=':')
             if all((row[0] != name) for row in csv_reader):
                 self.append_new_pose(input_f, name, function) # Function gets pose in this case
-                self.done_action = 'appended: ' + str(name) + ' to ' + str(pose_type) + ' list'
+                self.last_completed_action = 'appended: ' + str(name)
             else:
                 self.update_split(input_f, oldpose_f, newpose_f, name, function)
-                self.done_action = 'updated: ' + str(name) + ' in ' + str(pose_type) + ' list'
+                self.last_completed_action = 'updated: ' + str(name)
 
         
     def read_and_generate_pose_list(self, input_f):
@@ -371,47 +386,57 @@ class ur_pose_updater():
 
     def action_method_switch(self, action_case):
         '''
-        Call an action method based on the case number.
+        Call an action method based on the case number.Doesn't make much sense since
+        both tcp and joint poses are saved each time.
         '''
 
         if action_case == 0:
-            return self.update_pose_list(self.file_input_cases[self.pose_case],
-                                         self.file_oldpose_cases[self.pose_case],
-                                         self.file_newpose_cases[self.pose_case],
-                                         self.pose_name,
-                                         self.pose_type,
-                                         self.pose_type_switch(self.pose_case))
+            for i in [0, 1]:
+                self.update_pose_list(self.file_input_cases[i],
+                                      self.file_oldpose_cases[i],
+                                      self.file_newpose_cases[i],
+                                      self.pose_name,
+                                      self.pose_type_switch(i))
 
         elif action_case == 1:
-            return self.delete_pose(self.file_input_cases[self.pose_case],
-                                    self.file_newpose_cases[self.pose_case],
-                                    self.pose_name,
-                                    self.pose_type)
+            for i in [0, 1]:
+                self.delete_pose(self.file_input_cases[i],
+                                 self.file_newpose_cases[i],
+                                 self.pose_name)
 
         elif action_case == 2:
-            return self.clear_pose_list(self.file_input_cases[self.pose_case],
-                                        self.file_newpose_cases[self.pose_case],
-                                        self.pose_type)
+            for i in [0, 1]:
+                self.clear_pose_list(self.file_input_cases[i],
+                                     self.file_newpose_cases[i])
         else:
             pass
 
 
     def pose_type_switch(self, pose_case):
         '''
-        Fetch a current pose depending on the pose type.
+        Fetch a current pose depending on the pose type. Doesn't make much sense since
+        both tcp and joint poses are saved each time.
         '''
 
         if pose_case == 0:
             return self.robot.get_current_joint_values()
         elif pose_case == 1:
-            print(self.robot.get_pose_reference_frame())
-            self.robot.set_pose_reference_frame("/ENGINE")
-            engine_pose = self.scene.get_object_poses("/ENGINE")
-            print(engine_pose)
-            print(self.robot.get_pose_reference_frame())
-            return self.pose_to_list(self.robot.get_current_pose("ee_link"))
+            return self.pose_to_list(self.robot.get_current_pose("tool0"))
         else:
             pass
+
+    
+    def inhibit_tick(self):
+        '''
+        Check if two successive messages are the same and disallow consumption if True.
+        This method assigns values to the previous message variables so that they can be compared later.
+        '''
+
+        self.prev_action = self.action
+        self.prev_robot_name = self.robot_name
+        self.prev_robot_type = self.robot_type
+        self.prev_pose_name = self.pose_name
+
 
 
     def sp_callback(self, data):
@@ -423,8 +448,16 @@ class ur_pose_updater():
         self.action = data.action
         self.robot_name = data.robot_name
         self.robot_type = data.robot_type
-        self.pose_type = data.pose_type
         self.pose_name = data.pose_name
+
+        # Tick inhibitor msg check:
+        if self.action == self.prev_action and \
+           self.robot_name == self.prev_robot_name and \
+           self.robot_type == self.prev_robot_type and \
+           self.pose_name == self.prev_pose_name:
+            self.tick_inhibited = True
+        else:
+            self.tick_inhibited = False
 
         # Check for the 'reset' flag
         if self.pose_name == "RESET":
@@ -452,13 +485,6 @@ class ur_pose_updater():
                     self.callback_timeout = time.time() + self.message_freshness
                     self.timer_start()
 
-                    # Pose type switching
-                    if self.pose_type in self.pose_type_cases:
-                        self.pose_type_switch_error = ""
-                        self.pose_case = self.switcher(self.pose_type, self.pose_type_cases)
-                    else:
-                        self.pose_type_switch_error = "pose type: " + self.pose_type + " not valid"
-
                     # Action type switching
                     if self.action in self.action_type_cases:
                         self.action_method_switch_error = ""
@@ -466,40 +492,40 @@ class ur_pose_updater():
                     else:
                         self.action_method_switch_error = "action: " + self.action + " not valid"
 
-                    # Evaluate messages only once and use the 'reset' flag if stuck
-                    if self.pose_name != self.prev_pose_name:
-                        if self.action_method_switch_error == "" and self.pose_type_switch_error == "":
-                            self.prev_pose_name = self.pose_name
+                    # Evaluate messages only once and use the 'reset' flag if stuck:
+                    if self.tick_inhibited == False:
+                        if self.action_method_switch_error == "":
+                            self.inhibit_tick()
                             self.action_method_switch(self.action_case)
                         else:
                             pass
                     else:
                         pass
                 else:
-                    self.done_action = "SKIPPED"
+                    self.last_completed_action = "SKIPPED"
             else:
                 self.robot_name_error = "UR10 robot name: " + data.robot_name + " not valid"
-                self.done_action = "SKIPPED"
+                self.last_completed_action = "SKIPPED"
 
         elif self.robot_type == "UR10" and self.robot_name not in self.all_robot_names:
             self.robot_name_error = "robot name: " + self.robot_name + " not valid"
-            self.done_action = "SKIPPED"
+            self.last_completed_action = "SKIPPED"
 
         elif self.robot_type == "IIWA7" and self.robot_name not in self.all_robot_names:
             self.robot_name_error = "robot name: " + self.robot_name + " not valid"
-            self.done_action = "SKIPPED"
+            self.last_completed_action = "SKIPPED"
 
         elif self.robot_type == "UR10" and self.robot_name in self.iiwa7_robot_name_cases:
             self.robot_name_error = "robot name: " + self.robot_name + " does not match type " + self.robot_type
-            self.done_action = "SKIPPED"
+            self.last_completed_action = "SKIPPED"
             
         elif self.robot_type == "IIWA7" and self.robot_name in self.ur10_robot_name_cases:
             self.robot_name_error = "robot name: " + self.robot_name + " does not match type " + self.robot_type
-            self.done_action = "SKIPPED"
+            self.last_completed_action = "SKIPPED"
         
         elif self.robot_type not in self.robot_type_cases:
             self.robot_type_error = "robot type: " + self.robot_type + " not valid"
-            self.done_action = "SKIPPED"
+            self.last_completed_action = "SKIPPED"
 
 
 if __name__ == '__main__':

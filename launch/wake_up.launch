@@ -6,27 +6,42 @@
   <arg name="robot_name" default="TARS"/>
   <arg name="limited" default="true"/>
   <arg name="config" default="true"/>
+  <arg name="demo_sim" default="false"/>
+  <arg name="planner" default="ompl"/>
 
+  <group if="$(arg demo_sim)">
+    <include file="$(find ur10_moveit_config)/launch/demo.launch" >
+    </include>
+  </group>
 
   <param name="robot_name" value="$(arg robot_name)"/>
   <node pkg="ros1_unification_2019" name="ur_$(arg robot_name)_pose_updater" type="ur_pose_updater.py">  
   </node>
   <node pkg="ros1_unification_2019" name="ur_$(arg robot_name)_pose_unidriver" type="ur_pose_unidriver.py">  
   </node>
+  <node pkg="ros1_unification_2019" name="ur_$(arg robot_name)_scene_updater" type="ur_scene_updater.py">  
+  </node>
 
-  <include file="$(find ros1_unification_2019)/launch/ur10_unification_bringup_joint_limited.launch" >
-    <arg name="robot_ip" value="$(arg robot_ip)"/>
-  </include>
 
-  <include file="$(find ur10_moveit_config)/launch/ur10_moveit_planning_execution.launch" >
-    <arg name="limited" value="$(arg limited)"/>
-  </include>
+  <group unless="$(arg demo_sim)">
+    <include file="$(find ros1_unification_2019)/launch/ur10_unification_bringup_joint_limited.launch" unless="$(arg demo_sim)" >
+      <arg name="robot_ip" value="$(arg robot_ip)"/>
+    </include>
 
-  <include file="$(find ur10_moveit_config)/launch/moveit_rviz.launch" >
-    <arg name="config" value="$(arg config)"/>
-  </include>
+    <include file="$(find ur10_moveit_config)/launch/ur10_ips_moveit_planning_execution.launch" if="$(eval planner == 'ips')">
+      <arg name="limited" value="$(arg limited)"/>
+    </include>
 
-  <!-- For visualization in IPS 
-  <include file="$(find ips_state_collector)/launch/test.launch" />
-  -->
+    <include file="$(find ur10_moveit_config)/launch/ur10_ompl_moveit_planning_execution.launch" if="$(eval planner == 'ompl')">
+      <arg name="limited" value="$(arg limited)"/>
+    </include>
+
+    <include file="$(find ur10_moveit_config)/launch/moveit_rviz.launch" unless="$(arg demo_sim)">
+      <arg name="config" value="$(arg config)"/>
+    </include>
+
+    <!-- For visualization in IPS -->
+    <include file="$(find ips_state_collector)/launch/test.launch" if="$(eval planner == 'ips')"/>
+  </group>
+
 </launch>

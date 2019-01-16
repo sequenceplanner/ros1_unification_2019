@@ -5,7 +5,7 @@
 #----------------------------------------------------------------------------------------------------------------------#
     # Endre Eres
     # Unification Scene Updater
-    # V.0.9.8. alpha
+    # V.0.9.9.
 #----------------------------------------------------------------------------------------------------------------------#
 
 import rospy
@@ -23,10 +23,9 @@ from ros1_unification_2019.msg import Common
 from ros1_unification_2019.msg import SceneUpdaterSPToUni
 from ros1_unification_2019.msg import SceneUpdaterSPToUniRicochet as Ricochet
 from ros1_unification_2019.msg import SceneUpdaterUniToSP
-from ros1_unification_2019.msg import PsiObjectPose
 
 
-class scene_updater(transformations):
+class ur_scene_updater(transformations):
     '''
     Updating the Scene by manipulating collision objects
     using the moveit_commanders PlanningSceneInterface class.
@@ -37,7 +36,7 @@ class scene_updater(transformations):
 
         # General initialisers:
         roscpp_initialize(sys.argv)
-        rospy.init_node('scene_updater', anonymous=False)
+        rospy.init_node('ur_scene_updater', anonymous=False)
 
         # Moveit Commander initializers:
         self.robot = mgc("manipulator")
@@ -67,7 +66,7 @@ class scene_updater(transformations):
         self.ur10_robot_name_cases = ['TARS', 'KIPP', 'CASE']
         self.iiwa7_robot_name_cases = ['PLEX']
         self.all_robot_names = self.ur10_robot_name_cases + self.iiwa7_robot_name_cases
-        self.object_action_cases = ['ADD', 'REMOVE', 'MOVE', 'CLEAR', 'ATTACH', 'DETACH']
+        self.object_action_cases = ['ADD', 'REMOVE', 'CLEAR', 'ATTACH', 'DETACH']
         self.object_name_cases = ['LF', 'TSTOOL', 'AGV', 'ENGINE', 'OFTOOL'] # Gradually add more...
         self.object_file_cases = [self.lf_mesh, self.ts_tool_mesh, self.agv_mesh, self.engine_mesh, self.of_tool_mesh]
 
@@ -76,12 +75,9 @@ class scene_updater(transformations):
 
         # Message type initializers:
         self.pose = PoseStamped()
-        boxpose = PoseStamped()
         self.main_msg = SceneUpdaterUniToSP()
-        self.obj_msg = PsiObjectPose()
         self.common_msg = Common()
         self.ricochet_msg = Ricochet()
-        self.psi_msg = PsiObjectPose()
 
         # Initialize timeout and stopwatch
         self.callback_timeout = time.time()
@@ -94,25 +90,19 @@ class scene_updater(transformations):
         self.got_reset = False
         self.error_list = []
 
-        # PsiObjectPose message value initializers:
-        self.scene_object_name = ''
-        self.scene_object_pose = []
-
         # SceneUpdaterSPToUni message value initializers:
         self.object_action = ''
         self.object_name = ''
-        self.euler_pose = []
+
+        # TODO: Add error list and error handler
 
         # Ricochet message value initializers:
         self.got_object_action = ''
         self.got_object_name = ''
-        self.got_euler_pose = []
 
-        # Main message value initializers:
-        self.attached_objects = []
-        self.object_poses = []
-
-        # Other:
+        # Tick inhibitor:
+        self.tick_inhibited = False
+        self.prev_object_action = ''
         self.prev_object_name = ''
 
         # Publisher rates:
@@ -121,27 +111,50 @@ class scene_updater(transformations):
         # Some time to assure initialization:
         rospy.sleep(3)
 
-        #file, name, pose
-        #self.add_object(self.of_tool_mesh, 'OFTOOL', [0, 0.5, 0.8, 1.5707, 3.1415, 0])
+        #self.box_pose = ["world", 0.15115, -0.661048, 2.4475, 0.484524, 0.515012, -0.484524, 0.515012]
+        self.engine_pose = [0, 0.5, 0.8, 1.5707, 3.1415, 0]
+        self.box_of_pose = ["world", 0.15115, -0.661048, 2.4475, 0.484524, 0.515012, -0.484524, 0.515012]
+        self.lf_pose = [0.15115, -0.661048, 2.4475, 0.484524, 0.515012, -0.484524, 0.515012]
 
-        boxpose.header.frame_id = "world"
-        boxpose.pose.position.x = 0.15115
-        boxpose.pose.position.y = -0.661048
-        boxpose.pose.position.z = 2.4475
-        boxpose.pose.orientation.x = 0.484524
-        boxpose.pose.orientation.y = 0.515012
-        boxpose.pose.orientation.z = -0.484524
-        boxpose.pose.orientation.w = 0.515012
+        # Adding collision objects (will be done in a method after getting the pose)
+        self.scene.add_box("OFTOOL", self.list_to_pose_stamped(self.box_of_pose), size = (0.1, 0.1, 0.25))
+        self.add_object(self.engine_mesh, 'ENGINE', self.engine_pose)
+        time.sleep(5)
+        #self.add_object(self.of_tool_mesh, 'OFTOOL', self.of_pose)
+        #self.add_object(self.lf_mesh, 'LF', self.lf_pose)
 
-        self.scene.add_box("box1", boxpose, size = (0.1, 0.1, 0.25))
-        #add_box(self, name, pose, size = (1, 1, 1)):
-        self.add_object(self.engine_mesh, 'ENGINE', [0, 0.5, 0.8, 1.5707, 3.1415, 0])
         time.sleep(2)
-        self.attach_object("box1", "ee_link")
-        #print(self.scene.get_attached_objects())
-
+        # self.attach_object("box1", "tool0")
+        
         # Main loop method call:
         self.main()
+
+
+    def list_to_pose_stamped(self, list):
+        '''
+        Transform a list into a PoseStamped() type
+        '''
+
+        self.pose.header.frame_id = list[0]
+        self.pose.pose.position.x = list[1]
+        self.pose.pose.position.y = list[2]
+        self.pose.pose.position.z = list[3]
+        self.pose.pose.orientation.x = list[4]
+        self.pose.pose.orientation.y = list[5]
+        self.pose.pose.orientation.z = list[6]
+        self.pose.pose.orientation.w = list[7]
+        return self.pose
+
+
+    def inhibit_tick(self):
+        '''
+        Check if two successive messages are the same and disallow consumption if True.
+        This method assigns values to the previous message variables so that they can be compared later.
+        '''
+
+        self.prev_object_action = self.object_action
+        self.prev_object_name = self.object_name
+
 
 
     def main(self):
@@ -170,17 +183,10 @@ class scene_updater(transformations):
             # Construct the ricochet message part:
             self.ricochet_msg.got_object_action = self.object_action
             self.ricochet_msg.got_object_name = self.object_name
-            self.ricochet_msg.got_euler_pose = self.euler_pose
-
-            #Construct the PsiOvjectPose message part:
-            self.psi_msg.scene_object_name = self.scene_object_name 
-            self.psi_msg.scene_object_pose = self.scene_object_pose 
 
             # Construct the whole message:
             self.main_msg.state = self.common_msg
             self.main_msg.ricochet = self.ricochet_msg
-            self.main_msg.attached_objects = [] # self.attached_objects()
-            self.main_msg.object_poses = [] #self.object_poses()
             
             # Publish the message and sleep a bit:
             self.main_publisher.publish(self.main_msg)
@@ -266,7 +272,9 @@ class scene_updater(transformations):
         '''
         Remove an existing collision object from the planning scene
         '''
+        self.scene.remove_world_object(name)
 
+        '''
         if name in list(self.get_objects()):
             self.scene.remove_world_object(name)
             self.error = "none"
@@ -276,6 +284,7 @@ class scene_updater(transformations):
             self.error = "Object named: " + name + " not valid."
         else:
             pass
+        '''
 
     
     def move_object(self, obj_file, name, pose):
@@ -315,7 +324,8 @@ class scene_updater(transformations):
         '''
         Detach a specific collision object from the whole move group
         '''
-
+        self.robot.detach_object(name)
+        '''
         if name in list(self.get_attached_objects()):
             self.robot.detach_object(name)
             self.error = "none"
@@ -327,6 +337,7 @@ class scene_updater(transformations):
             self.error = "Object named: " + name + "not valid."
         else:
             pass
+        '''
 
     def action_method_switch(self, action_case):
         '''
@@ -335,24 +346,19 @@ class scene_updater(transformations):
 
         if action_case == 0:
             return self.add_object(self.object_name, 
-                                   self.object_file_cases[self.object_name_case], 
-                                   self.euler_pose)
+                                   self.object_file_cases[self.object_name_case])
 
         elif action_case == 1:
             return self.remove_object(self.object_name)
 
         elif action_case == 2:
-            return self.move_object(self.object_name, 
-                                    self.euler_pose)
-
-        elif action_case == 3:
             return self.clear_scene()
 
-        elif action_case == 4:
+        elif action_case == 3:
             return self.attach_object(self.object_name, 
-                                      self.robot.get_end_effector_link())
+                                      "tool0")
 
-        elif action_case == 5:
+        elif action_case == 4:
             return self.detach_object(self.object_name)
 
         else:
@@ -380,7 +386,13 @@ class scene_updater(transformations):
         # Assigning for remote reuse
         self.object_action = data.object_action 
         self.object_name = data.object_name
-        self.euler_pose = data.euler_pose
+
+        # Tick inhibitor msg check:
+        if self.object_action == self.prev_object_action and \
+           self.prev_object_name == self.object_name:
+            self.tick_inhibited = True
+        else:
+            self.tick_inhibited = False
 
         # Check for the 'reset' flag (doesn't make much sense but needed against the SP ping)
         if self.object_name == "RESET":
@@ -404,12 +416,14 @@ class scene_updater(transformations):
             self.action_method_switch_error = "action: " + self.action + " not valid"
 
         # Evaluate messages only once and use the 'reset' flag if stuck
-        if self.object_name != self.prev_object_name:
-            if self.action_method_switch_error == "" and self.object_name_switch_error == "":
-                self.prev_object_name = self.object_name
+        if self.tick_inhibited == False:
+            if self.action_method_switch_error == "":
+                self.inhibit_tick()
                 self.action_method_switch(self.object_action_case)
             else:
                 pass
+        else:
+            pass
 
         
     def switcher(self, what, case_list):
@@ -428,6 +442,6 @@ class scene_updater(transformations):
 
 if __name__ == '__main__':
     try:
-        scene_updater()
+        ur_scene_updater()
     except rospy.ROSInterruptException:
         pass
