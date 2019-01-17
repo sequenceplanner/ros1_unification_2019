@@ -144,7 +144,7 @@ class ur_pose_unidriver(transformations):
         self.pose_name_error = ''
         self.pose_length_error = ''
 
-         # Tick inhibitor:
+        # Tick inhibitor:
         self.tick_inhibited = False
         self.prev_action = ''
         self.prev_robot_name = ''
@@ -386,13 +386,19 @@ class ur_pose_unidriver(transformations):
         self.robot.set_max_acceleration_scaling_factor(self.acc_scaling)
         self.robot.set_goal_tolerance(self.goal_tolerance)
 
-
-        if pose_type == "JOINT":
-            self.joints.position = pose
-            self.robot.go(self.joints, wait = False)
-            rospy.sleep(1)
-        elif pose_type == "TCP":
-            quat_pose = self.list_to_pose(pose)
+        if len(pose) == 5 or len(pose) == 6:
+            if pose_type == "JOINT":
+                self.joints.position = pose
+                self.robot.go(self.joints, wait = False)
+                rospy.sleep(1)
+            elif pose_type == "TCP":
+                quat_pose = self.list_to_pose(pose)
+                self.robot.go(quat_pose, wait = False)
+                rospy.sleep(1)
+            else:
+                pass
+        else:
+            pass
 
             #(self.trans, self.rot) = self.tf_listener.lookupTransform('/world', '/ENGINE', rospy.Time(0))
             #engineInWorld=fromTranslationRotation(self.trans, self.rot)
@@ -401,10 +407,7 @@ class ur_pose_unidriver(transformations):
             #print(engineInWorld*goalInInEngine)
 
             #self.rot_vec = self.trans.append
-            self.robot.go(quat_pose, wait = False)
-            rospy.sleep(1)
-        else:
-            pass
+            
 
     
     def get_static_joint_pose(self):

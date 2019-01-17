@@ -21,6 +21,7 @@ TODO: Support for IIWA7 robot: PLEX
 
 TODO: List dependancies\
 TODO: Add dependancies in a bash script for easier installation
+TODO: Add nodes: UR mode, MIR mode, MIR pose, Kinect...
 
 ## Get yourself a robot
 1.  Official UR simulated robot (recommended for Ubuntu 16.04):\
@@ -30,13 +31,13 @@ Get the official UR simulator from: https://www.universal-robots.com/download/ a
 
 3.  Real robot. Since the official UR Simulated robot is run on a local machine, the default robot_ip has been set to 0.0.0.0. For a real robot follow the roslaunch command with a robot_ip argument. Also, restrict all joint limits to [-pi, pi] the same way you would do it in the simulator.
 
-Waking up robots can be done with the roslaunch command followed with the robot_name argument. Let's wake up a simulated TARS on a local machine for example:
+Waking up robots can be done with the roslaunch command followed with the robot_name argument and a planner to be used argument. Let's wake up a simulated TARS on a local machine for example using ompl for path planning:
 ```
-roslaunch ros1_unification_2019 wake_up.launch robot_name:=TARS
+roslaunch ros1_unification_2019 wake_up.launch robot_name:=TARS planner:=ompl
 ```
 If you are waking up a real robot, add the robot_ip argument in the end:
 ```
-roslaunch ros1_unification_2019 wake_up.launch robot_name:=TARS robot_ip:=xxx.xxx.x.xxx
+roslaunch ros1_unification_2019 wake_up.launch robot_name:=TARS planner:=ompl robot_ip:=xxx.xxx.x.xxx
 ```
 
 ## Nodes
@@ -46,7 +47,7 @@ A few nodes exist in this package that aim to enable and in the same time simpli
 ### ur_pose_updater
 
 TODO: some testing\
-Allows the user to save robot poses by sending messages to this node. The poses are saved in according csv files and can be later looked up by other nodes.
+Allows the user to save robot poses by sending messages to this node. The poses are saved in two csv files and can be later looked up by other nodes.
 - Support for pose manipulation: UPDATE, DELETE and CLEAR
 - UPDATE: if pose name is not existing, append to specified pose list
 - UPDATE: if pose name existing in the pose list, update with new values
@@ -60,7 +61,6 @@ An example message that this node consumes:
 action: 'UPDATE'
 robot_type: 'UR10'
 robot_name: 'TARS'
-pose_type: 'JOINT'
 pose_name: 'POSE1'
 ```
 
@@ -74,13 +74,12 @@ info:
   error_list: []
 ricochet: 
   got_action: "UPDATE"
-  got_pose_type: "JOINT"
   got_pose_name: "POSE1"
   got_robot_type: "UR10"
   got_robot_name: "TARS"
 saved_poses: 
   joint_pose_list: [control_pose, POSE1]
-  tcp_pose_list: [control_pose]
+  tcp_pose_list: [control_pose, POSE1]
 last_completed_action: "appended: POSE1 to JOINT list"
 ```
 The info part of the published message contains the name of the robot which poses are manipulated, a message freshness indicator (you can set the time defining freshness in the script), elapsed time since the plast consumed message, a reset indicator showing that the node consumed a reset command and a list of errors that is generated after each message is consumed. The ricochet part publishes the received part so that the command publisher can have a comparisson if needed. All the saved poses in the csv files are published in two separate files that contain all the JOINT or the TCP poses. Lastly, The last completed action shows whait it says it shows.
@@ -140,7 +139,6 @@ An example message that this node consumes:
 ```
 object_action: 'ADD'
 object_name: 'ENGINE'
-euler_pose: [2, 2, 2, 1.5707, 0, -1.5707]
 ```
 
 An example message that the node publishes, for example after receiving the message above:
@@ -154,9 +152,6 @@ info:
 ricochet: 
   got_object_action: "ADD"
   got_object_name: "ENGINE"
-  euler_pose: [2, 2, 2, 1.5707, 0, -1.5707]
-attached_objects: []
-object_poses: [{"ENGINE":[2, 2, 2, 1.5707, 0, -1.5707]}]
 ```
  
 ### ur_transformations

@@ -5,7 +5,7 @@
 #----------------------------------------------------------------------------------------------------------------------#
     # Endre Eres
     # Unification Scene Updater
-    # V.0.9.9.
+    # V.1.0.0.
 #----------------------------------------------------------------------------------------------------------------------#
 
 import rospy
@@ -413,7 +413,7 @@ class ur_scene_updater(transformations):
             self.action_method_switch_error = ""
             self.object_action_case = self.switcher(self.object_action, self.object_action_cases)
         else:
-            self.action_method_switch_error = "action: " + self.action + " not valid"
+            self.action_method_switch_error = "action: " + self.object_action + " not valid"
 
         # Evaluate messages only once and use the 'reset' flag if stuck
         if self.tick_inhibited == False:
