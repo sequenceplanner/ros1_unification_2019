@@ -55,7 +55,7 @@ class ur_scene_updater(transformations):
         self.engine_mesh = self.rospack.get_path('ros1_unification_2019') + '/description/cad_meshes/engine_reduced.stl'
         self.agv_mesh = self.rospack.get_path('ros1_unification_2019') + '/description/cad_meshes/AGV.stl'
         self.ts_tool_mesh = self.rospack.get_path('ros1_unification_2019') + '/description/unstruct_ptcl_meshes/tstool.stl'
-        self.of_tool_mesh = self.rospack.get_path('ros1_unification_2019') + '/description/cad_meshes/OFTool.stl'
+        self.of_tool_mesh = self.rospack.get_path('ros1_unification_2019') + '/description/cad_meshes/oftool2.stl'
 
         # UR10 link idenifiers:
         self.ur10_links = ['base_link', 'shoulder_link', 'elbow_link', 'wrist_1_link',
@@ -115,10 +115,14 @@ class ur_scene_updater(transformations):
         self.engine_pose = [0, 0.5, 0.8, 1.5707, 3.1415, 0]
         self.box_of_pose = ["world", 0.15115, -0.661048, 2.4475, 0.484524, 0.515012, -0.484524, 0.515012]
         self.lf_pose = [0.15115, -0.661048, 2.4475, 0.484524, 0.515012, -0.484524, 0.515012]
+	self.of_tool_pose = ["world", 0,0,0,0,0,0]
 
         # Adding collision objects (will be done in a method after getting the pose)
         self.scene.add_box("OFTOOL", self.list_to_pose_stamped(self.box_of_pose), size = (0.1, 0.1, 0.25))
+	#self.add_object(self.of_tool_mesh, 'OFTOOL', self.of_tool_pose)
         self.add_object(self.engine_mesh, 'ENGINE', self.engine_pose)
+
+
         time.sleep(5)
         #self.add_object(self.of_tool_mesh, 'OFTOOL', self.of_pose)
         #self.add_object(self.lf_mesh, 'LF', self.lf_pose)

@@ -41,7 +41,9 @@
     </include>
 
     <!-- For visualization in IPS -->
+    <!-- 
     <include file="$(find ips_state_collector)/launch/test.launch" if="$(eval planner == 'ips')"/>
+    -->
   </group>
 
 </launch>
