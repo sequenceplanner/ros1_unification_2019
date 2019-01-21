@@ -171,6 +171,9 @@ class ur_pose_unidriver(transformations):
         # Some time to assure initialization:
         rospy.sleep(3)
 
+        print(self.robot.get_planning_frame())
+        print(self.robot.get_end_effector_link())
+
         # Check if Robot Name argument is correct:
         if self.robot_name_param in self.ur10_robot_name_cases:
 
@@ -363,12 +366,16 @@ class ur_pose_unidriver(transformations):
         quat_pose = []
         tcp_pose = []
         quat_pose = self.find_pose(name, input_f)
-                
+
         if quat_pose != []:
-            tcp_pose = self.quat_to_rot(quat_pose[0], quat_pose[1], quat_pose[2],quat_pose[3], quat_pose[4], quat_pose[5], quat_pose[6])
-            if len(tcp_pose) == 6:
+            if len(quat_pose) == 7:
+                tcp_pose = self.quat_to_rot(quat_pose[0], quat_pose[1], quat_pose[2],quat_pose[3], quat_pose[4], quat_pose[5], quat_pose[6])
                 self.pose_length_error = ''
                 script_str = "movel(p" + str(tcp_pose) + ", a=" + str(a) + ", v=" + str(v) + ", t=" + str(0) + ")"
+                self.urScriptPublisher.publish(script_str)
+            elif len(quat_pose) == 6:
+                self.pose_length_error = ''
+                script_str = "movel(p" + str(quat_pose) + ", a=" + str(a) + ", v=" + str(v) + ", t=" + str(0) + ")"
                 self.urScriptPublisher.publish(script_str)
             else:
                 self.pose_length_error = 'invalid tcp pose length'
@@ -393,7 +400,9 @@ class ur_pose_unidriver(transformations):
                 rospy.sleep(1)
             elif pose_type == "TCP":
                 quat_pose = self.list_to_pose(pose)
-                self.robot.go(quat_pose, wait = False)
+                #self.robot.set_pose_target(pose, "tool0")
+                #self.robot.async_go()
+                self.robot.go(quat_pose, wait = False) # uses ee_link
                 rospy.sleep(1)
             else:
                 pass

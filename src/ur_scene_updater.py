@@ -115,12 +115,13 @@ class ur_scene_updater(transformations):
         self.engine_pose = [0, 0.5, 0.8, 1.5707, 3.1415, 0]
         self.box_of_pose = ["world", 0.15115, -0.661048, 2.4475, 0.484524, 0.515012, -0.484524, 0.515012]
         self.lf_pose = [0.15115, -0.661048, 2.4475, 0.484524, 0.515012, -0.484524, 0.515012]
-	self.of_tool_pose = ["world", 0,0,0,0,0,0]
+        self.of_tool_pose = [0.15115, -0.661048, 2.4475, 0.484524, 0.515012, -0.484524, 0.515012]
 
         # Adding collision objects (will be done in a method after getting the pose)
-        self.scene.add_box("OFTOOL", self.list_to_pose_stamped(self.box_of_pose), size = (0.1, 0.1, 0.25))
-	#self.add_object(self.of_tool_mesh, 'OFTOOL', self.of_tool_pose)
-        self.add_object(self.engine_mesh, 'ENGINE', self.engine_pose)
+        #self.scene.add_box("OFTOOLBOX", self.list_to_pose_stamped(self.box_of_pose), size = (0.1, 0.1, 0.25))
+        #self.add_object(self.of_tool_mesh, 'OFTOOL', self.of_tool_pose)
+        self.add_object(self.of_tool_mesh, 'OFTOOL', self.of_tool_pose, (1, 1, 1))
+        self.add_object(self.engine_mesh, 'ENGINE', self.engine_pose, (0.01, 0.01, 0.01))
 
 
         time.sleep(5)
@@ -244,7 +245,7 @@ class ur_scene_updater(transformations):
         return object_list
 
     
-    def add_object(self, obj_file, name, pose):
+    def add_object(self, obj_file, name, pose, mesh_size):
         '''
         Add a collision object to the planning scene from
         the list of object name cases
@@ -263,7 +264,7 @@ class ur_scene_updater(transformations):
             self.pose.pose.orientation.z = quat[5]
             self.pose.pose.orientation.w = quat[6]
 
-            self.scene.add_mesh(name, self.pose, obj_file, (0.01, 0.01, 0.01))
+            self.scene.add_mesh(name, self.pose, obj_file, mesh_size)
             self.error = "none"
 
         elif name != '' and name not in self.object_name_cases:
