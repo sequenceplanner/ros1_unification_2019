@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+
+<launch>
+
+  <arg name="robot_ip" default="0.0.0.0"/>
+  <arg name="robot_name" default="TARS"/>
+  <arg name="limited" default="true"/>
+  <arg name="config" default="true"/>
+  <arg name="demo_sim" default="false"/>
+  <arg name="planner" default="ips"/>
+
+  <group if="$(arg demo_sim)">
+    <include file="$(find ur10_moveit_config)/launch/demo.launch" >
+    </include>
+  </group>
+
+  <param name="robot_description" command="$(find xacro)/xacro --inorder '$(find ros1_unification_2019)/description/urdf/ur10_joint_limited_robot.urdf.xacro'"/>
+
+  <include file="$(find ur_modern_driver)/launch/ur_common.launch">
+    <arg name="robot_ip" value="$(arg robot_ip)"/>
+    <arg name="min_payload"  value="0"/>
+    <arg name="max_payload"  value="10"/>
+  </include>
+
+  <include file="$(find ur10_moveit_config)/launch/ur10_moveit_planning_execution.launch">
+    <arg name="pipeline" default="$(arg planner)"/>
+  </include>
+
+  <param name="robot_name" value="$(arg robot_name)"/>
+
+  <node pkg="ros1_unification_2019" name="ur_$(arg robot_name)_pose_updater" type="ur_pose_updater.py" output="screen"/>  
+  <node pkg="ros1_unification_2019" name="ur_$(arg robot_name)_pose_unidriver" type="ur_pose_unidriver.py" output="screen"/>  
+  <node pkg="ros1_unification_2019" name="ur_$(arg robot_name)_scene_updater" type="ur_scene_updater.py" output="screen"/>  
+
+  <include file="$(find ur10_moveit_config)/launch/moveit_rviz.launch">
+    <arg name="config" value="true"/>
+  </include>
+
+  <include file="$(find ips_state_collector)/launch/test.launch"/>
+
+</launch>

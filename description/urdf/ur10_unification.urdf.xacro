@@ -69,7 +69,7 @@
     <xacro:property name="wrist_3_length" value="${d6}" />
 
     <link name="station">
-      <visual>
+      <!--visual>
         <geometry>
           <mesh filename="package://ros1_unification_2019/description/unstruct_ptcl_meshes/unification_wo_tstool.stl" scale="1 1 1"/>
         </geometry>
@@ -81,7 +81,7 @@
         <geometry>
           <mesh filename="package://ros1_unification_2019/description/unstruct_ptcl_meshes/unification_wo_tstool.stl" scale="1 1 1"/>
         </geometry>
-      </collision>
+      </collision-->
     </link>
 
     <joint name="station_robot" type="fixed">
