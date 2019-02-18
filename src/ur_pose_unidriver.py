@@ -434,7 +434,7 @@ class ur_pose_unidriver(transformations):
             joint_csv_reader = csv.reader(joint_csv, delimiter=':')
             for row in joint_csv_reader:
                 saved_pose = ast.literal_eval(row[1])
-                if all(numpy.isclose(current_pose[i], saved_pose[i], atol=self.joint_tol) for i in range(0, 5)):
+                if all(numpy.isclose(current_pose[i], saved_pose[i], atol=self.joint_tol) for i in range(0, 6)):
                     actual_joint_pose = row[0]
                     break
                 else:

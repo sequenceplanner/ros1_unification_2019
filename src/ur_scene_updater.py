@@ -55,7 +55,7 @@ class ur_scene_updater(transformations):
         self.engine_mesh = self.rospack.get_path('ros1_unification_2019') + '/description/cad_meshes/engine_reduced.stl'
         self.agv_mesh = self.rospack.get_path('ros1_unification_2019') + '/description/cad_meshes/AGV.stl'
         self.ts_tool_mesh = self.rospack.get_path('ros1_unification_2019') + '/description/unstruct_ptcl_meshes/tstool.stl'
-        self.of_tool_mesh = self.rospack.get_path('ros1_unification_2019') + '/description/cad_meshes/oftool2.stl'
+        self.of_tool_mesh = self.rospack.get_path('ros1_unification_2019') + '/description/cad_meshes/OFTool.stl'
 
         # UR10 link idenifiers:
         self.ur10_links = ['base_link', 'shoulder_link', 'elbow_link', 'wrist_1_link',
@@ -111,11 +111,13 @@ class ur_scene_updater(transformations):
         # Some time to assure initialization:
         rospy.sleep(3)
 
-        #self.box_pose = ["world", 0.15115, -0.661048, 2.4475, 0.484524, 0.515012, -0.484524, 0.515012]
-        self.engine_pose = [0, 0.5, 0.8, 1.5707, 3.1415, 0]
+        # When calling add_pose(...), Endre assumes the 3 first are x-y-z and the last 3 are r-p-y
+        #self.engine_pose = [0.0, 0.5, 0.8, 1.5707, 3.1415, 0] #Old pose
+        self.engine_pose = [0.046, 0.545, 0.950, -1.56206968, 0.0, -3.12413936] # IPS Calibrated
         self.box_of_pose = ["world", 0.15115, -0.661048, 2.4475, 0.484524, 0.515012, -0.484524, 0.515012]
         self.lf_pose = [0.15115, -0.661048, 2.4475, 0.484524, 0.515012, -0.484524, 0.515012]
-        self.of_tool_pose = [0.15115, -0.661048, 2.4475, 0.484524, 0.515012, -0.484524, 0.515012]
+        #self.of_tool_pose = [0.15115, -0.661048, 2.4475, 0.484524, 0.515012, -0.484524, 0.515012] # Old, wrong rotation.
+        self.of_tool_pose = [0.155639, -0.696262, 2.456036, 1.57079632679, 0.0, 0.0] # IPS calibrated
 
         # Adding collision objects (will be done in a method after getting the pose)
         #self.scene.add_box("OFTOOLBOX", self.list_to_pose_stamped(self.box_of_pose), size = (0.1, 0.1, 0.25))
