@@ -5,7 +5,7 @@
 #----------------------------------------------------------------------------------------------------------------------#
     # Endre Eres
     # UR Pose Unification Driver
-    # V.1.3.0.
+    # V.1.2.0.
 #----------------------------------------------------------------------------------------------------------------------#
 
 import rospy
@@ -17,9 +17,6 @@ import sys
 import time
 import csv
 import tf
-import struct
-import socket
-import threading
 from std_msgs.msg import String
 from geometry_msgs.msg import Pose
 from geometry_msgs.msg import PoseStamped
@@ -27,14 +24,10 @@ from sensor_msgs.msg import JointState
 from transformations import transformations
 from moveit_commander import MoveGroupCommander as mgc
 from moveit_commander import roscpp_initialize, roscpp_shutdown
-from moveit_msgs.msg import MoveGroupActionFeedback as mgaf
 from ros1_unification_2019.msg import Common
 from ros1_unification_2019.msg import URPoseSPToUni
 from ros1_unification_2019.msg import URPoseSPToUniRicochet as Ricochet
 from ros1_unification_2019.msg import URPoseUniToSP
-
-HOST = "0.0.0.0"
-PORT = 30003
 
 class ur_pose_unidriver(transformations):
     '''
@@ -62,11 +55,12 @@ class ur_pose_unidriver(transformations):
         # Subscribers and Publishers:
         rospy.Subscriber("/unification_roscontrol/ur_pose_unidriver_sp_to_uni", URPoseSPToUni, self.sp_callback)
         rospy.Subscriber("/joint_states", JointState, self.jointCallback)
-        rospy.Subscriber("/move_group/feedback", mgaf, self.moveitFdbckCallback)
         self.main_publisher = rospy.Publisher("unification_roscontrol/ur_" \
             + self.robot_name_param + "_pose_unidriver_uni_to_sp", URPoseUniToSP, queue_size=10)
         self.urScriptPublisher = rospy.Publisher("/ur_driver/URScript", String, queue_size=10)
 
+
+        #self.tf_listener = tf.TransformListener()
 
         # ROS package localizer:
         self.rospack = rospkg.RosPack()
@@ -79,6 +73,9 @@ class ur_pose_unidriver(transformations):
                                                                              + self.robot_name_param \
                                                                              + '_tcp_poses.csv'
 
+        # Init tf listener
+        # self.tf_listener = tf.TransformListener()
+        
         # Switcher lists of cases for implementing a switch-case like behavior:
         self.robot_type_cases = ['UR10', 'IIWA7']
         self.ur10_robot_name_cases = ['TARS', 'KIPP', 'CASE']
@@ -87,8 +84,6 @@ class ur_pose_unidriver(transformations):
         self.pose_type_cases = ['JOINT', 'TCP']
         self.action_type_cases = ['MOVEJ', 'MOVEL', 'PLANNED']
         self.file_input_cases = [self.file_joint_input, self.file_tcp_input]
-
-        self.actual_urscript_tcp_pose = ''
 
         # Message freshness definition in seconds:
         self.message_freshness = 3
@@ -151,11 +146,6 @@ class ur_pose_unidriver(transformations):
         self.pose_type_error = ''
         self.pose_name_error = ''
         self.pose_length_error = ''
-        self.socket_error = ''
-
-        # Moveit state feedback initializers:
-        self.moveit_state = ''
-        self.moveit_message = ''
 
         # Tick inhibitor:
         self.tick_inhibited = False
@@ -184,7 +174,8 @@ class ur_pose_unidriver(transformations):
         # Some time to assure initialization:
         rospy.sleep(3)
 
-        self.get_urscript_static_tcp_pose()
+        print(self.robot.get_planning_frame())
+        print(self.robot.get_end_effector_link())
 
         # Check if Robot Name argument is correct:
         if self.robot_name_param in self.ur10_robot_name_cases:
@@ -233,10 +224,8 @@ class ur_pose_unidriver(transformations):
             self.main_msg.info = self.common_msg
             self.main_msg.ricochet = self.ricochet_msg
             self.main_msg.moving = self.moving
-            self.main_msg.actual_pose = self.generate_current_pose()
-            self.main_msg.moveit_state = self.moveit_state 
-            self.main_msg.moveit_message = self.moveit_message
-
+            self.main_msg.actual_pose = self.generate_current_pose() # self.get_static_joint_pose()
+            
             # Publish the message and sleep a bit:
             self.main_publisher.publish(self.main_msg)
             self.main_pub_rate.sleep()
@@ -284,8 +273,7 @@ class ur_pose_unidriver(transformations):
                                 self.pose_type_error,
                                 self.pose_name_error,
                                 self.robot_type_error,
-                                self.robot_name_error,
-                                self.socket_error]
+                                self.robot_name_error]
 
         if all((err == '') for err in potential_error_list):
             error_list = []
@@ -384,7 +372,11 @@ class ur_pose_unidriver(transformations):
 
         if quat_pose != []:
             if len(quat_pose) == 7:
-                self.pose_length_error = 'pose is quat => planning'
+                self.pose_length_error = 'plan, do not movel for this pose'
+                #tcp_pose = self.quat_to_rot(quat_pose[0], quat_pose[1], quat_pose[2],quat_pose[3], quat_pose[4], quat_pose[5], quat_pose[6])
+                #self.pose_length_error = ''
+                #script_str = "movel(p" + str(tcp_pose) + ", a=" + str(a) + ", v=" + str(v) + ", t=" + str(0) + ")"
+                #self.urScriptPublisher.publish(script_str)
             elif len(quat_pose) == 6:
                 self.pose_length_error = ''
                 script_str = "movel(p" + str(quat_pose) + ", a=" + str(a) + ", v=" + str(v) + ", t=" + str(0) + ")"
@@ -405,30 +397,32 @@ class ur_pose_unidriver(transformations):
         self.robot.set_max_acceleration_scaling_factor(self.acc_scaling)
         self.robot.set_goal_tolerance(self.goal_tolerance)
 
-        self.pose_length_error = ''
-        self.pose_type_error = ''
         
-        if pose_type == "JOINT":
-            if len(pose) == 6:
-                self.joints.position = pose
-                self.robot.go(self.joints, wait = False)
-                rospy.sleep(1)
-            else:
-                self.pose_length_error = 'Invalid pose length'
-                pass
-        elif pose_type == "TCP":
-            if len(pose) == 7:
-                quat_pose = self.list_to_pose(pose)
-                self.robot.go(quat_pose, wait = False)
-                rospy.sleep(1)
-            else:
-                self.pose_length_error = 'pose is rotvec => urscript movel'
-                pass
+        if len(pose) == 6 and pose_type == "JOINT":
+            self.joints.position = pose
+            self.robot.go(self.joints, wait = False)
+            rospy.sleep(1)
+        elif len(pose) == 7 and pose_type == "TCP":
+            quat_pose = self.list_to_pose(pose)
+            #self.robot.set_pose_target(pose, "tool0")
+            #self.robot.async_go()
+            self.robot.go(quat_pose, wait = False) # uses ee_link
+            rospy.sleep(1)
         else:
-            self.pose_type_error = 'invalid pose_type'
+            self.pose_length_error = 'movel (tpc pose only), do not plan for this pose'
             pass
     
 
+            #(self.trans, self.rot) = self.tf_listener.lookupTransform('/world', '/ENGINE', rospy.Time(0))
+            #engineInWorld=fromTranslationRotation(self.trans, self.rot)
+            #goalInInEngine=fromTranslationRotation(quat_pose.position, quat_pose.orientation)
+
+            #print(engineInWorld*goalInInEngine)
+
+            #self.rot_vec = self.trans.append
+            
+
+    
     def get_static_joint_pose(self):
         '''
         While all joint velocities are 0, compare current robot joint pose with saved poses in the joint_csv file
@@ -462,6 +456,7 @@ class ur_pose_unidriver(transformations):
         '''
 
         current_pose = self.pose_to_list(self.robot.get_current_pose("ee_link"))
+        #current_pose = self.joint_pose
             
         with open(self.file_tcp_input, 'r') as tcp_csv:
             tcp_csv_reader = csv.reader(tcp_csv, delimiter=':')
@@ -477,119 +472,43 @@ class ur_pose_unidriver(transformations):
         return actual_tcp_pose
 
 
-    def get_urscript_static_tcp_pose(self):
+    def get_tf_static_tcp_pose(self):
         '''
-        Using the client interface port 30003 to read cartesian TCP pose from the UR directly.
-        It is very slow, so it is put in a separate thread.
+        While all joint velocities are 0, compare current robot tcp pose with saved poses in the tcp_csv file
+        and return the name of the saved pose if they match with a tolerance, else return unknown as the 
+        current tcp pose. NOT USED CURRENTLY.
         '''
 
-        def socket_tcp_callback():
-
-            self.socket_error = ""
-            tcp_pose = []
-            actual_tcp_pose = ''
-            print("asdf")
-
-            while(1):
-
-                try:
-                    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    s.settimeout(10)
-                    s.connect((HOST, PORT))
-                    time.sleep(0.1)
-
-                    # Drop the first 11 packets...
-                    packet_1 = s.recv(4)
-                    packet_2 = s.recv(8)
-                    packet_3 = s.recv(48)
-                    packet_4 = s.recv(48)
-                    packet_5 = s.recv(48)
-                    packet_6 = s.recv(48)
-                    packet_7 = s.recv(48) 
-                    packet_8 = s.recv(48)
-                    packet_9 = s.recv(48)
-                    packet_10 = s.recv(48)
-                    packet_11 = s.recv(48)
-
-                    packet_12 = s.recv(8)
-                    packet_12 = packet_12.encode("hex") #convert the data from \x hex notation to plain hex
-                    x = str(packet_12)
-                    x = struct.unpack('!d', packet_12.decode('hex'))[0]
-
-                    packet_13 = s.recv(8)
-                    packet_13 = packet_13.encode("hex") #convert the data from \x hex notation to plain hex
-                    y = str(packet_13)
-                    y = struct.unpack('!d', packet_13.decode('hex'))[0]
-
-                    packet_14 = s.recv(8)
-                    packet_14 = packet_14.encode("hex") #convert the data from \x hex notation to plain hex
-                    z = str(packet_14)
-                    z = struct.unpack('!d', packet_14.decode('hex'))[0]
-
-                    packet_15 = s.recv(8)
-                    packet_15 = packet_15.encode("hex") #convert the data from \x hex notation to plain hex
-                    Rx = str(packet_15)
-                    Rx = struct.unpack('!d', packet_15.decode('hex'))[0]
-
-                    packet_16 = s.recv(8)
-                    packet_16 = packet_16.encode("hex") #convert the data from \x hex notation to plain hex
-                    Ry = str(packet_16)
-                    Ry = struct.unpack('!d', packet_16.decode('hex'))[0]
-
-                    packet_17 = s.recv(8)
-                    packet_17 = packet_17.encode("hex") #convert the data from \x hex notation to plain hex
-                    Rz = str(packet_17)
-                    Rz = struct.unpack('!d', packet_17.decode('hex'))[0]
-
-                    tcp_pose = [x, y, z, Rx, Ry, Rz]
-                    #print(tcp_pose)
-
-                    s.close()
-
-                except (socket.error):
-                    self.socket_error = "Socket conn to UR wrong"
-                    pass
-
-                
-                with open(self.file_tcp_input, 'r') as tcp_csv:
-                    tcp_csv_reader = csv.reader(tcp_csv, delimiter=':')
-                    for row in tcp_csv_reader:
-                        if len(ast.literal_eval(row[1])) == 6:
-                            saved_pose = ast.literal_eval(row[1])
-                            if all(numpy.isclose(tcp_pose[i], saved_pose[i], atol=self.tcp_tol) for i in range(0, 5)):
-                                actual_tcp_pose = row[0]
-                                break
-                            else:
-                                actual_tcp_pose = "UNKNOWN"
-                                pass
-                        else:
-                            pass
-
-                self.actual_urscript_tcp_pose = actual_tcp_pose
+        current_pose = self.pose_to_list(self.robot.get_current_pose("ee_link"))
+        #current_pose = self.joint_pose
             
-        t1 = threading.Thread(target=socket_tcp_callback)
-        t1.daemon = True
-        t1.start()
+        with open(self.file_tcp_input, 'r') as tcp_csv:
+            tcp_csv_reader = csv.reader(tcp_csv, delimiter=':')
+            for row in tcp_csv_reader:
+                saved_pose = ast.literal_eval(row[1])
+                if all(numpy.isclose(current_pose[i], saved_pose[i], atol=self.tcp_tol) for i in range(0, 5)):
+                    actual_tcp_pose = row[0]
+                    break
+                else:
+                    actual_tcp_pose = "UNKNOWN"
+                    pass
+        
+        return actual_tcp_pose
 
 
     def generate_current_pose(self):
         '''
-        Genetates current pose that is sent as act_pos to SP.
+        NOT USED CURRENTLY. 
         '''
 
         actual_pose = ''
         actual_joint_pose = self.get_static_joint_pose()
-        actual_moveit_tcp_pose = self.get_moveit_static_tcp_pose()
-        actual_urscript_tcp_pose = self.actual_urscript_tcp_pose
+        actual_tcp_pose = self.get_static_tcp_pose()
 
         if self.moving == False:
             if actual_joint_pose == "UNKNOWN":
-                if actual_moveit_tcp_pose == "UNKNOWN":
-                    actual_pose = self.actual_urscript_tcp_pose
-                    self.prev_stat_pose = actual_pose
-                else:
-                    actual_pose = actual_moveit_tcp_pose
-                    self.prev_stat_pose = actual_pose
+                actual_pose = actual_tcp_pose
+                self.prev_stat_pose = actual_pose
             else:
                 actual_pose = actual_joint_pose
                 self.prev_stat_pose = actual_pose
@@ -686,8 +605,8 @@ class ur_pose_unidriver(transformations):
             self.tick_inhibited = False
 
         # Check for the 'reset' flag
-        if self.pose_name == "UNKNOWN":
-            self.prev_pose_name = "UNKNOWN"
+        if self.pose_name == "RESET":
+            self.prev_pose_name = "RESET"
             self.got_reset = True
         else:
             self.got_reset = False
@@ -760,14 +679,6 @@ class ur_pose_unidriver(transformations):
             self.robot_type_error = "robot type: " + self.robot_type + " not valid"
             self.done_action = "SKIPPED"
     
-
-    def moveitFdbckCallback(self, data):
-        '''
-        Check state and last message of moveit
-        '''
-        self.moveit_state = data.feedback.state
-        self.moveit_message = data.status.text
-
 
     def jointCallback(self, joint):
         '''

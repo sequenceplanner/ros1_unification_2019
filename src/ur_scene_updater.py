@@ -119,21 +119,17 @@ class ur_scene_updater(transformations):
         #self.of_tool_pose = [0.15115, -0.661048, 2.4475, 0.484524, 0.515012, -0.484524, 0.515012] # Old, wrong rotation.
         self.of_tool_pose = [0.155639, -0.696262, 2.456036, 1.57079632679, 0.0, 0.0] # IPS calibrated
 
+
         # Adding collision objects (will be done in a method after getting the pose)
         #self.scene.add_box("OFTOOLBOX", self.list_to_pose_stamped(self.box_of_pose), size = (0.1, 0.1, 0.25))
         #self.add_object(self.of_tool_mesh, 'OFTOOL', self.of_tool_pose)
         self.add_object(self.of_tool_mesh, 'OFTOOL', self.of_tool_pose, (1, 1, 1))
         self.add_object(self.engine_mesh, 'ENGINE', self.engine_pose, (0.01, 0.01, 0.01))
 
-
-        time.sleep(5)
-        #self.add_object(self.of_tool_mesh, 'OFTOOL', self.of_pose)
-        #self.add_object(self.lf_mesh, 'LF', self.lf_pose)
-
         time.sleep(2)
-        # self.attach_object("box1", "tool0")
-        
-        # Main loop method call:
+
+        self.added_objects = self.scene.get_known_object_names()
+
         self.main()
 
 
@@ -194,6 +190,8 @@ class ur_scene_updater(transformations):
             # Construct the whole message:
             self.main_msg.state = self.common_msg
             self.main_msg.ricochet = self.ricochet_msg
+            self.main_msg.scene_objects = self.get_current_scene_objects()
+            self.main_msg.attached_objects = self.get_current_attached_objects()
             
             # Publish the message and sleep a bit:
             self.main_publisher.publish(self.main_msg)
@@ -219,32 +217,20 @@ class ur_scene_updater(transformations):
         return str('%.1f' % (time.time() - self.start)) + " seconds"
 
 
-    def attached_objects(self):
+    def get_current_scene_objects(self):
         '''
-        Check if there are any attached collision objects 
-        and return the list of those object.
-        '''
-
-        object_list = []
-        object_list.append(str(self.scene.get_attached_objects()))
-
-        return object_list
-
-    
-    def object_poses(self):
-        '''
-        Check if there are any collision objects in the
-        current planning scene and return the list 
-        of those objects.
+        Check if there are collision objects in the scene
         '''
 
-        object_list = []
-        objects_in_scene = list(self.scene.get_objects())
-        for obj in objects_in_scene:
-            self.obj_msg.object_name = obj
-            self.obj_msg.object_pose = self.quat_to_rot(self.get_object_poses(obj))
-            object_list.append(self.obj_msg)
-        return object_list
+        return self.scene.get_known_object_names()
+
+
+    def get_current_attached_objects(self):
+        '''
+        Return currently attached collision objects
+        '''
+
+        return list(set(self.added_objects) - set(self.scene.get_known_object_names()))
 
     
     def add_object(self, obj_file, name, pose, mesh_size):
@@ -281,27 +267,6 @@ class ur_scene_updater(transformations):
         '''
         self.scene.remove_world_object(name)
 
-        '''
-        if name in list(self.get_objects()):
-            self.scene.remove_world_object(name)
-            self.error = "none"
-        elif name != '' and name not in list(self.get_objects()) and name in self.object_name_cases:
-            self.error = "Object named: " + name + " not existing in the scene."
-        elif name != '' and name not in self.object_name_cases:
-            self.error = "Object named: " + name + " not valid."
-        else:
-            pass
-        '''
-
-    
-    def move_object(self, obj_file, name, pose):
-        '''
-        Move and existing object in the scene to a noew pose
-        '''
-
-        self.scene.remove_object(obj_file, name)
-        self.add_object(obj_file, name, pose)
-
 
     def clear_scene(self):
         '''
@@ -315,16 +280,8 @@ class ur_scene_updater(transformations):
         '''
         Attach a collision object to a specified link
         '''
-
-        #if name in list(self.get_objects()) and link in self.links:
         self.robot.attach_object(name, link)
-            # self.error = "none"
-        # elif name in list(self.get_objects()) and not link in self.ur10_links:
-            # self.error = "Link named: " + link + " not valid."
-        # elif name not in list(self.get_objects()):
-            # self.error = "Object named: " + name + "not valid."
-        # else:
-            # pass
+
 
     
     def detach_object(self, name):
@@ -332,19 +289,7 @@ class ur_scene_updater(transformations):
         Detach a specific collision object from the whole move group
         '''
         self.robot.detach_object(name)
-        '''
-        if name in list(self.get_attached_objects()):
-            self.robot.detach_object(name)
-            self.error = "none"
-        elif name not in list(self.get_attached_objects()) and name in self.get_objects() and name in self.object_name_cases:
-            self.error = "Object named: " + name + "not attached."
-        elif name not in self.get_objects() and name in self.object_name_cases:
-            self.error = "Object named: " + name + "not in the scene."
-        elif name not in self.object_name_cases:
-            self.error = "Object named: " + name + "not valid."
-        else:
-            pass
-        '''
+        
 
     def action_method_switch(self, action_case):
         '''
@@ -363,7 +308,7 @@ class ur_scene_updater(transformations):
 
         elif action_case == 3:
             return self.attach_object(self.object_name, 
-                                      "tool0")
+                                      "ee_link")
 
         elif action_case == 4:
             return self.detach_object(self.object_name)
