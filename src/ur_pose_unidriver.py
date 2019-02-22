@@ -33,6 +33,7 @@ from ros1_unification_2019.msg import URPoseSPToUni
 from ros1_unification_2019.msg import URPoseSPToUniRicochet as Ricochet
 from ros1_unification_2019.msg import URPoseUniToSP
 
+#HOST = "192.168.10.16"
 HOST = "0.0.0.0"
 PORT = 30003
 
@@ -467,7 +468,7 @@ class ur_pose_unidriver(transformations):
             tcp_csv_reader = csv.reader(tcp_csv, delimiter=':')
             for row in tcp_csv_reader:
                 saved_pose = ast.literal_eval(row[1])
-                if all(numpy.isclose(current_pose[i], saved_pose[i], atol=self.tcp_tol) for i in range(0, 5)):
+                if all(numpy.isclose(current_pose[i], saved_pose[i], atol=self.tcp_tol) for i in range(0, 7)):
                     actual_tcp_pose = row[0]
                     break
                 else:
@@ -482,6 +483,8 @@ class ur_pose_unidriver(transformations):
         Using the client interface port 30003 to read cartesian TCP pose from the UR directly.
         It is very slow, so it is put in a separate thread.
         '''
+
+        
 
         def socket_tcp_callback():
 
@@ -554,9 +557,11 @@ class ur_pose_unidriver(transformations):
                 with open(self.file_tcp_input, 'r') as tcp_csv:
                     tcp_csv_reader = csv.reader(tcp_csv, delimiter=':')
                     for row in tcp_csv_reader:
-                        if len(ast.literal_eval(row[1])) == 6:
+                        if len(ast.literal_eval(row[1])) == 6 and tcp_pose != []:
                             saved_pose = ast.literal_eval(row[1])
-                            if all(numpy.isclose(tcp_pose[i], saved_pose[i], atol=self.tcp_tol) for i in range(0, 5)):
+                            #print(saved_pose)
+                            #print(tcp_pose)
+                            if all(numpy.isclose(tcp_pose[i], saved_pose[i], atol=self.tcp_tol) for i in range(0, 6)):
                                 actual_tcp_pose = row[0]
                                 break
                             else:
@@ -566,6 +571,7 @@ class ur_pose_unidriver(transformations):
                             pass
 
                 self.actual_urscript_tcp_pose = actual_tcp_pose
+                
             
         t1 = threading.Thread(target=socket_tcp_callback)
         t1.daemon = True

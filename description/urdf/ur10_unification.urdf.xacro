@@ -316,7 +316,7 @@
     <link name="${prefix}ee_link">
       <collision>
         <geometry>
-          <box size="0.01 0.01 0.01"/>
+          <box size="0.0 0.0 0.0"/>
         </geometry>
         <origin rpy="0 0 0" xyz="-0.01 0 0"/>
       </collision>

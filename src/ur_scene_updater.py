@@ -351,7 +351,11 @@ class ur_scene_updater(transformations):
             self.prev_object_name = "RESET"
             self.got_reset = True
         else:
-            self.got_reset = False        
+            self.got_reset = False    
+
+        # Refreshing the message and restarting the stopwatch
+        self.callback_timeout = time.time() + self.message_freshness
+        self.timer_start()    
 
         # Object name switching
         if self.object_name in self.object_name_cases:
