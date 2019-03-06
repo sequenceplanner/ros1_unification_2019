@@ -1,4 +1,4 @@
-### NOTE: Things in this README might not be true if you can see this message
+# This readme needs rewriting. Also, code refactoring awaits.
 
 # ros1_unification_2019
 
@@ -27,9 +27,11 @@ TODO: Add nodes: UR mode, MIR mode, MIR pose, Kinect...
 1.  Official UR simulated robot (recommended for Ubuntu 16.04):\
 Get the official UR simulator from: https://www.universal-robots.com/download/ and extract the folder somewhere convenient. Start the simulator by following the instrucions on the UR website. As MoveIt! seems to have difficulties with finding plans for the UR with full joint limits [-2pi, 2pi], it is recommended to restrict the robot's joints within the range of [-pi, pi] and that limitation is set to default for the moveit planning execution in the wake_up.launch file. The joint limits should also be set to [-pi, pi] in the official UR simulator because that will disallow the robot to move outside of those joint limits within the simulator itself, so forcing the robot outside of those bounds will result in Protective Stop. It is recommended to use the official simulator since you will have the capability to send URScript commands and do some other things.
 
-2.  Demo simulated robot provided with the ur10_moveit_config package (Ubuntu 18.04, or figure out how to make the official UR simulator work Ubuntu 18.04).
+2.  Docker contained robots (suitable for multi robot testing). write more...
 
-3.  Real robot. Since the official UR Simulated robot is run on a local machine, the default robot_ip has been set to 0.0.0.0. For a real robot follow the roslaunch command with a robot_ip argument. Also, restrict all joint limits to [-pi, pi] the same way you would do it in the simulator.
+3.  Demo simulated robot provided with the ur10_moveit_config package (Ubuntu 18.04, or figure out how to make the official UR simulator work Ubuntu 18.04).
+
+4.  Real robot. Since the official UR Simulated robot is run on a local machine, the default robot_ip has been set to 0.0.0.0. For a real robot follow the roslaunch command with a robot_ip argument. Also, restrict all joint limits to [-pi, pi] the same way you would do it in the simulator.
 
 Waking up robots can be done with the roslaunch command followed with the robot_name argument and a planner to be used argument. Let's wake up a simulated TARS on a local machine for example using ompl for path planning:
 ```

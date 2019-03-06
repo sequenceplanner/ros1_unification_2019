@@ -23,7 +23,7 @@
   -->
   <joint name="worldstation" type="fixed">
     <parent link="world" />
-    <child link = "station" />
+    <child link = "stationn" />
     <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0" />
   </joint>
 

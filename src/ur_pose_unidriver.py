@@ -34,7 +34,8 @@ from ros1_unification_2019.msg import URPoseSPToUniRicochet as Ricochet
 from ros1_unification_2019.msg import URPoseUniToSP
 
 #HOST = "192.168.10.16"
-HOST = "0.0.0.0"
+#HOST = "0.0.0.0"
+HOST = rospy.get_param('/robot_ip')
 PORT = 30003
 
 class ur_pose_unidriver(transformations):
@@ -52,21 +53,21 @@ class ur_pose_unidriver(transformations):
         roscpp_initialize(sys.argv)
 
         # Getting the robot_name parameter from the parameter server (maybe shouldn't be set to global):
-        self.robot_name_param = rospy.get_param('robot_name')
+        self.robot_name_param = rospy.get_param('/robot_name')
+        
 
         # ROS node initializer:
-        rospy.init_node('ur_' + self.robot_name_param + '_pose_unidriver', anonymous=False)
+        rospy.init_node(self.robot_name_param + '_ur_pose_unidriver', anonymous=False)
 
         # Move Group specifier:
         self.robot = mgc("manipulator")
       
         # Subscribers and Publishers:
-        rospy.Subscriber("/unification_roscontrol/ur_pose_unidriver_sp_to_uni", URPoseSPToUni, self.sp_callback)
-        rospy.Subscriber("/joint_states", JointState, self.jointCallback)
-        rospy.Subscriber("/move_group/feedback", mgaf, self.moveitFdbckCallback)
-        self.main_publisher = rospy.Publisher("unification_roscontrol/ur_" \
-            + self.robot_name_param + "_pose_unidriver_uni_to_sp", URPoseUniToSP, queue_size=10)
-        self.urScriptPublisher = rospy.Publisher("/ur_driver/URScript", String, queue_size=10)
+        rospy.Subscriber("unification_roscontrol/ur_pose_unidriver_sp_to_uni", URPoseSPToUni, self.sp_callback)
+        rospy.Subscriber("joint_states", JointState, self.jointCallback)
+        rospy.Subscriber("move_group/feedback", mgaf, self.moveitFdbckCallback)
+        self.main_publisher = rospy.Publisher("unification_roscontrol/ur_pose_unidriver_uni_to_sp", URPoseUniToSP, queue_size=10)
+        self.urScriptPublisher = rospy.Publisher("ur_driver/URScript", String, queue_size=10)
 
 
         # ROS package localizer:
@@ -439,17 +440,21 @@ class ur_pose_unidriver(transformations):
         '''
 
         # Very slow: current_pose = self.robot.get_current_joint_values()
+        actual_joint_pose = ""
         current_pose = self.joint_pose
 
         with open(self.file_joint_input, 'r') as joint_csv:
             joint_csv_reader = csv.reader(joint_csv, delimiter=':')
             for row in joint_csv_reader:
-                saved_pose = ast.literal_eval(row[1])
-                if all(numpy.isclose(current_pose[i], saved_pose[i], atol=self.joint_tol) for i in range(0, 6)):
-                    actual_joint_pose = row[0]
-                    break
+                if len(ast.literal_eval(row[1])) == 6 and current_pose != []:
+                    saved_pose = ast.literal_eval(row[1])
+                    if all(numpy.isclose(current_pose[i], saved_pose[i], atol=self.joint_tol) for i in range(0, 6)):
+                        actual_joint_pose = row[0]
+                        break
+                    else:
+                        actual_joint_pose = "UNKNOWN"
+                        pass
                 else:
-                    actual_joint_pose = "UNKNOWN"
                     pass
         
         return actual_joint_pose
