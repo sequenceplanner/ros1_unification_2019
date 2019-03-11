@@ -14,7 +14,7 @@
   <arg name="robot_name"  default="TARS"/>
   <arg name="min_payload"  default="0.0"/>
   <arg name="max_payload"  default="10.0"/>
-  <arg name="prefix" default="$(arg robot_name)" />
+  <arg name="prefix" default="" />
   <arg name="use_lowbandwidth_trajectory_follower" default="false"/>
   <arg name="time_interval" default="0.008"/>
   <arg name="servoj_time" default="0.008" />

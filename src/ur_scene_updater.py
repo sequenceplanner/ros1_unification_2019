@@ -36,18 +36,20 @@ class ur_scene_updater(transformations):
 
         # General initialisers:
         roscpp_initialize(sys.argv)
-        rospy.init_node('ur_scene_updater', anonymous=False)
 
         # Getting the robot_name parameter from the parameter server:
-        self.robot_name_param = rospy.get_param('/robot_name')
+        self.robot_name_param = rospy.get_param('robot_name')
+
+        # ROS node initializer:
+        rospy.init_node(self.robot_name_param + 'ur_scene_updater', anonymous=False)
 
         # Moveit Commander initializers:
         self.robot = mgc("manipulator")
         self.scene = psi()
       
         # Subscribers and Publishers:
-        rospy.Subscriber("unification_roscontrol/scene_updater_sp_to_uni", SceneUpdaterSPToUni, self.sp_callback)
-        self.main_publisher = rospy.Publisher("unification_roscontrol/scene_updater_uni_to_sp", SceneUpdaterUniToSP, queue_size=10)
+        rospy.Subscriber(self.robot_name_param + "/unification_roscontrol/scene_updater_sp_to_uni", SceneUpdaterSPToUni, self.sp_callback)
+        self.main_publisher = rospy.Publisher(self.robot_name_param + "/unification_roscontrol/scene_updater_uni_to_sp", SceneUpdaterUniToSP, queue_size=10)
 
         # ROS package localizer:
         self.rospack = rospkg.RosPack()

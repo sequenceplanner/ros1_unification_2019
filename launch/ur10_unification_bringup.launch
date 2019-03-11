@@ -26,7 +26,7 @@
   <arg name="servoj_lookahead_time" default="1." />
   <arg name="max_joint_difference" default="0.01" />
   <arg name="base_frame" default="$(arg prefix)/base" />
-  <arg name="tool_frame" default="$(arg prefix)/tool0" />
+  <arg name="tool_frame" default="$(arg prefix)/tool0_controller" />
   <arg name="shutdown_on_disconnect" default="true" />
   <!-- robot model -->
 

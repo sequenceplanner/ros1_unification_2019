@@ -39,7 +39,7 @@ class ur_pose_updater():
         roscpp_initialize(sys.argv)
 
         # Getting the robot_name parameter from the parameter server:
-        self.robot_name_param = rospy.get_param('/robot_name')
+        self.robot_name_param = rospy.get_param('robot_name')
 
         # ROS node initializer:
         rospy.init_node(self.robot_name_param + '_ur_pose_updater', anonymous=False)
@@ -48,8 +48,8 @@ class ur_pose_updater():
         self.robot = mgc("manipulator")
       
         # Subscribers and Publishers:
-        rospy.Subscriber("unification_roscontrol/ur_pose_updater_sp_to_uni", PoseUpdaterSPToUni, self.sp_callback)
-        self.main_publisher = rospy.Publisher("unification_roscontrol/ur_pose_updater_uni_to_sp", PoseUpdaterUniToSP, queue_size=10)
+        rospy.Subscriber(self.robot_name_param + "/unification_roscontrol/ur_pose_updater_sp_to_uni", PoseUpdaterSPToUni, self.sp_callback)
+        self.main_publisher = rospy.Publisher(self.robot_name_param + "/unification_roscontrol/ur_pose_updater_uni_to_sp", PoseUpdaterUniToSP, queue_size=10)
 
         # ROS package localizer:
         self.rospack = rospkg.RosPack()

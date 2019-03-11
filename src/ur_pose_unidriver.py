@@ -35,7 +35,7 @@ from ros1_unification_2019.msg import URPoseUniToSP
 
 #HOST = "192.168.10.16"
 #HOST = "0.0.0.0"
-HOST = rospy.get_param('/robot_ip')
+HOST = rospy.get_param('robot_ip')
 PORT = 30003
 
 class ur_pose_unidriver(transformations):
@@ -53,7 +53,7 @@ class ur_pose_unidriver(transformations):
         roscpp_initialize(sys.argv)
 
         # Getting the robot_name parameter from the parameter server (maybe shouldn't be set to global):
-        self.robot_name_param = rospy.get_param('/robot_name')
+        self.robot_name_param = rospy.get_param('robot_name')
         
 
         # ROS node initializer:
@@ -63,10 +63,10 @@ class ur_pose_unidriver(transformations):
         self.robot = mgc("manipulator")
       
         # Subscribers and Publishers:
-        rospy.Subscriber("unification_roscontrol/ur_pose_unidriver_sp_to_uni", URPoseSPToUni, self.sp_callback)
+        rospy.Subscriber(self.robot_name_param + "/unification_roscontrol/ur_pose_unidriver_sp_to_uni", URPoseSPToUni, self.sp_callback)
         rospy.Subscriber("joint_states", JointState, self.jointCallback)
         rospy.Subscriber("move_group/feedback", mgaf, self.moveitFdbckCallback)
-        self.main_publisher = rospy.Publisher("unification_roscontrol/ur_pose_unidriver_uni_to_sp", URPoseUniToSP, queue_size=10)
+        self.main_publisher = rospy.Publisher(self.robot_name_param + "/unification_roscontrol/ur_pose_unidriver_uni_to_sp", URPoseUniToSP, queue_size=10)
         self.urScriptPublisher = rospy.Publisher("ur_driver/URScript", String, queue_size=10)
 
 

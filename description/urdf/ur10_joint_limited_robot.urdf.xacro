@@ -26,4 +26,16 @@
     <origin xyz="0.0 0.0 0" rpy="0.0 0.0 0.0" />
   </joint>
 
+  <!--
+
+  <link name="TARS/world" />
+
+  <joint name="base_world_world" type="fixed">
+    <parent link="TARS/world" />
+    <child link = "world" />
+    <origin xyz="0.0 0.0 0" rpy="0.0 0.0 0.0" />
+  </joint>
+
+  -->
+
 </robot>

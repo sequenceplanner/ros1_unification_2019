@@ -23,8 +23,8 @@
   <arg name="servoj_gain" default="100." />
   <arg name="servoj_lookahead_time" default="1." />
   <arg name="max_joint_difference" default="0.01" />
-  <arg name="base_frame" default="$(arg robot_name)/base" />
-  <arg name="tool_frame" default="$(arg robot_name)/tool0_controller" />
+  <arg name="base_frame" default="base" />
+  <arg name="tool_frame" default="tool0_controller" />
   <arg name="shutdown_on_disconnect" default="true" />
 
   <!-- require_activation defines when the service /ur_driver/robot_enable needs to be called. -->

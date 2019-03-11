@@ -9,51 +9,46 @@
   <arg name="config" default="true"/>
   <arg name="demo_sim" default="false"/>
   <arg name="planner" default="ompl"/>
-  <param name="tf_prefix" value="$(arg robot_name)"/>
-  <param name="/robot_ip" value="$(arg robot_ip)"/>
-  <param name="/robot_name" value="$(arg robot_name)"/>
-
+  <param name="robot_name" value="$(arg robot_name)"/>
+  <param name="robot_ip" value="$(arg robot_ip)"/>
+  
   <group if="$(arg demo_sim)">
-    <group ns="$(arg robot_name)">
-      <param name="robot_name" value="$(arg robot_name)"/>
-      <include file="$(find ur10_moveit_config)/launch/demo.launch" >
-      </include>
-    </group>
+    <include file="$(find ros1_unification_2019)/launch/demo.launch" >
+    </include>
   </group>
   
   <group unless="$(arg demo_sim)">
-    <group ns="$(arg robot_name)">
-      <include file="$(find ros1_unification_2019)/launch/ur10_unification_bringup_joint_limited.launch" unless="$(arg demo_sim)" >
-        <arg name="robot_ip" value="$(arg robot_ip)"/>
-        <arg name="reverse_port" value="$(arg reverse_port)"/>
-        <arg name="robot_name" value="$(arg robot_name)"/>
-      </include>
 
-      <include file="$(find ur10_moveit_config)/launch/ur10_ips_moveit_planning_execution.launch" if="$(eval planner == 'ips')">
-        <arg name="limited" value="$(arg limited)"/>
-      </include>
+    <include file="$(find ros1_unification_2019)/launch/ur10_unification_bringup_joint_limited.launch" unless="$(arg demo_sim)" >
+      <arg name="robot_ip" value="$(arg robot_ip)"/>
+      <arg name="reverse_port" value="$(arg reverse_port)"/>
+      <arg name="robot_name" value="$(arg robot_name)"/>
+    </include>
 
-      <include file="$(find ur10_moveit_config)/launch/ur10_ompl_moveit_planning_execution.launch" if="$(eval planner == 'ompl')">
-        <arg name="limited" value="$(arg limited)"/>
-        <arg name="robot_name" value="$(arg robot_name)"/>
-      </include>
+    <include file="$(find ros1_unification_2019)/launch/ur10_ips_moveit_planning_execution.launch" if="$(eval planner == 'ips')">
+      <arg name="limited" value="$(arg limited)"/>
+    </include>
 
-      <include file="$(find ur10_moveit_config)/launch/moveit_rviz.launch" unless="$(arg demo_sim)">
-        <arg name="config" value="$(arg config)"/>
-      </include>
+    <include file="$(find ros1_unification_2019)/launch/ur10_ompl_moveit_planning_execution.launch" if="$(eval planner == 'ompl')">
+      <arg name="limited" value="$(arg limited)"/>
+      <arg name="robot_name" value="$(arg robot_name)"/>
+    </include>
 
-      <node pkg="ros1_unification_2019" name="ur_pose_updater" type="ur_pose_updater.py">  
-      </node>
-      <node pkg="ros1_unification_2019" name="ur_pose_unidriver" type="ur_pose_unidriver.py">  
-      </node>
-      <node pkg="ros1_unification_2019" name="ur_scene_updater" type="ur_scene_updater.py">  
-      </node>
+    <include file="$(find ros1_unification_2019)/launch/moveit_rviz.launch" unless="$(arg demo_sim)">
+      <arg name="config" value="$(arg config)"/>
+    </include>
 
-      <!-- For visualization in IPS -->
-      <!-- 
-      <include file="$(find ips_state_collector)/launch/test.launch" if="$(eval planner == 'ips')"/>
-      -->
-    </group>
+    <node pkg="ros1_unification_2019" name="ur_pose_updater" type="ur_pose_updater.py">  
+    </node>
+    <node pkg="ros1_unification_2019" name="ur_pose_unidriver" type="ur_pose_unidriver.py">  
+    </node>
+    <node pkg="ros1_unification_2019" name="ur_scene_updater" type="ur_scene_updater.py">  
+    </node>
+
+    <!-- For visualization in IPS -->
+    <!-- 
+    <include file="$(find ips_state_collector)/launch/test.launch" if="$(eval planner == 'ips')"/>
+    -->
+    
   </group>
-
 </launch>

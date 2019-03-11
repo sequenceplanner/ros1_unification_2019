@@ -2,7 +2,7 @@
   <arg name="limited" default="false"/>
   <arg name="robot_name" default="TARS"/>
 
-  <include file="$(find ur10_moveit_config)/launch/planning_context.launch">
+  <include file="$(find ros1_unification_2019)/launch/planning_context.launch">
     <arg name="limited" value="$(arg limited)" />
   </include>
 
@@ -24,11 +24,11 @@
   <arg name="publish_monitored_planning_scene" default="true"/>
 
   <!-- Planning Functionality -->
-  <include ns="move_group" file="$(find ur10_moveit_config)/launch/ompl_planning_pipeline.launch.xml">
+  <include ns="move_group" file="$(find ros1_unification_2019)/launch/ompl_planning_pipeline.launch.xml">
   </include>
 
   <!-- Trajectory Execution Functionality -->
-  <include ns="move_group" file="$(find ur10_moveit_config)/launch/trajectory_execution.launch.xml" if="$(arg allow_trajectory_execution)">
+  <include ns="move_group" file="$(find ros1_unification_2019)/launch/trajectory_execution.launch.xml" if="$(arg allow_trajectory_execution)">
     <arg name="moveit_manage_controllers" value="true" />
     <arg name="moveit_controller_manager" value="ur10" unless="$(arg fake_execution)"/>
     <arg name="moveit_controller_manager" value="fake" if="$(arg fake_execution)"/>
@@ -36,7 +36,7 @@
   </include>
 
   <!-- Sensors Functionality -->
-  <include ns="move_group" file="$(find ur10_moveit_config)/launch/sensor_manager.launch.xml" if="$(arg allow_trajectory_execution)">
+  <include ns="move_group" file="$(find ros1_unification_2019)/launch/sensor_manager.launch.xml" if="$(arg allow_trajectory_execution)">
     <arg name="moveit_sensor_manager" value="ur10" />
   </include>
 
