@@ -63,10 +63,10 @@ class ur_pose_unidriver(transformations):
         self.robot = mgc("manipulator")
       
         # Subscribers and Publishers:
-        rospy.Subscriber(self.robot_name_param + "/unification_roscontrol/ur_pose_unidriver_sp_to_uni", URPoseSPToUni, self.sp_callback)
+        rospy.Subscriber("/unification_roscontrol/ur_pose_unidriver_sp_to_uni", URPoseSPToUni, self.sp_callback)
         rospy.Subscriber("joint_states", JointState, self.jointCallback)
         rospy.Subscriber("move_group/feedback", mgaf, self.moveitFdbckCallback)
-        self.main_publisher = rospy.Publisher(self.robot_name_param + "/unification_roscontrol/ur_pose_unidriver_uni_to_sp", URPoseUniToSP, queue_size=10)
+        self.main_publisher = rospy.Publisher("/unification_roscontrol/ur_TARS_pose_unidriver_uni_to_sp", URPoseUniToSP, queue_size=10)
         self.urScriptPublisher = rospy.Publisher("ur_driver/URScript", String, queue_size=10)
 
 

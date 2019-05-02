@@ -48,8 +48,8 @@ class ur_pose_updater():
         self.robot = mgc("manipulator")
       
         # Subscribers and Publishers:
-        rospy.Subscriber(self.robot_name_param + "/unification_roscontrol/ur_pose_updater_sp_to_uni", PoseUpdaterSPToUni, self.sp_callback)
-        self.main_publisher = rospy.Publisher(self.robot_name_param + "/unification_roscontrol/ur_pose_updater_uni_to_sp", PoseUpdaterUniToSP, queue_size=10)
+        rospy.Subscriber("/unification_roscontrol/ur_pose_updater_sp_to_uni", PoseUpdaterSPToUni, self.sp_callback)
+        self.main_publisher = rospy.Publisher("/unification_roscontrol/ur_pose_updater_uni_to_sp", PoseUpdaterUniToSP, queue_size=10)
 
         # ROS package localizer:
         self.rospack = rospkg.RosPack()

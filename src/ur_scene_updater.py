@@ -48,8 +48,8 @@ class ur_scene_updater(transformations):
         self.scene = psi()
       
         # Subscribers and Publishers:
-        rospy.Subscriber(self.robot_name_param + "/unification_roscontrol/scene_updater_sp_to_uni", SceneUpdaterSPToUni, self.sp_callback)
-        self.main_publisher = rospy.Publisher(self.robot_name_param + "/unification_roscontrol/scene_updater_uni_to_sp", SceneUpdaterUniToSP, queue_size=10)
+        rospy.Subscriber("/unification_roscontrol/scene_updater_sp_to_uni", SceneUpdaterSPToUni, self.sp_callback)
+        self.main_publisher = rospy.Publisher("/unification_roscontrol/scene_updater_uni_to_sp", SceneUpdaterUniToSP, queue_size=10)
 
         # ROS package localizer:
         self.rospack = rospkg.RosPack()
