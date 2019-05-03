@@ -380,56 +380,142 @@ class ur_pose_unidriver(transformations):
         Using the URScript API, move to a position with a linear in tool-space move.
         '''
 
-        quat_pose = []
-        tcp_pose = []
-        quat_pose = self.find_pose(name, input_f)
-
-        if quat_pose != []:
-            if len(quat_pose) == 7:
-                self.pose_length_error = 'pose is quat => planning'
-            elif len(quat_pose) == 6:
-                self.pose_length_error = ''
-                script_str = "movel(p" + str(quat_pose) + ", a=" + str(a) + ", v=" + str(v) + ", t=" + str(0) + ")"
-                self.urScriptPublisher.publish(script_str)
-            else:
-                self.pose_length_error = 'invalid tcp pose length'
+        if 'TF' in name:
+            self.threaded_tf_lookup_movel()
+        
         else:
-            self.pose_name_error = 'pose with the name ' + name + ' not saved'
 
+            quat_pose = []
+            tcp_pose = []
+            quat_pose = self.find_pose(name, input_f)
+
+            if quat_pose != []:
+                if len(quat_pose) == 7:
+                    self.pose_length_error = 'pose is quat => planning'
+                elif len(quat_pose) == 6:
+                    self.pose_length_error = ''
+                    script_str = "movel(p" + str(quat_pose) + ", a=" + str(a) + ", v=" + str(v) + ", t=" + str(0) + ")"
+                    self.urScriptPublisher.publish(script_str)
+                else:
+                    self.pose_length_error = 'invalid tcp pose length'
+            else:
+                self.pose_name_error = 'pose with the name ' + name + ' not saved'
+
+
+    def threaded_tf_lookup_movel(self):
+        def threaded_tf_lookup_movel_callback():
+
+            listener = tf.TransformListener()
+            unset = False
+            trans = []
+            rot = []
+            while not rospy.is_shutdown():
+                try:
+                
+                    (trans, rot) = listener.lookupTransform('/base', '/ladderframe', rospy.Time(0))
+                    
+                    if type(trans) == list and type(rot) == list and unset == False:
+
+                        #self.robot.set_max_velocity_scaling_factor(self.speed_scaling)
+                        #self.robot.set_max_acceleration_scaling_factor(self.acc_scaling)
+                        #self.robot.set_goal_tolerance(self.goal_tolerance)
+
+                        quaternion = (rot[0], rot[1], rot[2], rot[3])
+                        euler_pose = tf.transformations.euler_from_quaternion(quaternion)
+                        euler_list = [trans[0], trans[1], trans[2], euler_pose[0], euler_pose[1], euler_pose[2]]
+
+                        print(euler_pose)
+
+                        script_str = "movel(p" + str(euler_list) + ", a=" + str(self.acc_scaling) + ", v=" + str(self.speed_scaling) + ", t=" + str(0) + ")"
+                        self.urScriptPublisher.publish(script_str)
+                        rospy.sleep(1)
+                        unset = True
+                       
+                    else:
+                        pass
+
+                except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException): 
+                    continue
+
+        t = threading.Thread(target=threaded_tf_lookup_movel_callback)
+        t.daemon = True
+        t.start()
+
+
+    def threaded_tf_lookup(self):
+        def threaded_tf_lookup_callback():
+
+            listener = tf.TransformListener()
+            unset = False
+            trans = []
+            rot = []
+            while not rospy.is_shutdown():
+                try:
+                
+                    (trans, rot) = listener.lookupTransform('/base_link', '/ladderframe', rospy.Time(0))
+                    
+                    if type(trans) == list and type(rot) == list and unset == False:
+                        pose_app = [trans[0], trans[1], trans[2], rot[0], rot[1], rot[2], rot[3]]
+
+                        self.robot.set_max_velocity_scaling_factor(self.speed_scaling)
+                        self.robot.set_max_acceleration_scaling_factor(self.acc_scaling)
+                        self.robot.set_goal_tolerance(self.goal_tolerance)
+
+                        quat_pose = self.list_to_pose(pose_app)
+                        print(quat_pose)
+                        self.robot.go(quat_pose, wait = False)
+                        rospy.sleep(1)
+                        unset = True
+                       
+                    else:
+                        pass
+# 
+                except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException): 
+                    continue
+
+        t = threading.Thread(target=threaded_tf_lookup_callback)
+        t.daemon = True
+        t.start()
     
     def planned_move(self, input_f, name, pose_type, a, v):
         '''
         Using the movegroup_commander class from MoveIt, plan and execute a trajectory to a joint or a tcp pose
         '''
-        pose = self.find_pose(name, input_f)
 
-        self.robot.set_max_velocity_scaling_factor(self.speed_scaling)
-        self.robot.set_max_acceleration_scaling_factor(self.acc_scaling)
-        self.robot.set_goal_tolerance(self.goal_tolerance)
+        if 'TF' in name:
+            self.threaded_tf_lookup()                
 
-        self.pose_length_error = ''
-        self.pose_type_error = ''
-        
-        if pose_type == "JOINT":
-            if len(pose) == 6:
-                self.joints.position = pose
-                self.robot.go(self.joints, wait = False)
-                rospy.sleep(1)
-            else:
-                self.pose_length_error = 'Invalid pose length'
-                pass
-        elif pose_type == "TCP":
-            if len(pose) == 7:
-                quat_pose = self.list_to_pose(pose)
-                self.robot.go(quat_pose, wait = False)
-                rospy.sleep(1)
-            else:
-                self.pose_length_error = 'pose is rotvec => urscript movel'
-                pass
         else:
-            self.pose_type_error = 'invalid pose_type'
-            pass
+            pose = self.find_pose(name, input_f)
+
+            self.robot.set_max_velocity_scaling_factor(self.speed_scaling)
+            self.robot.set_max_acceleration_scaling_factor(self.acc_scaling)
+            self.robot.set_goal_tolerance(self.goal_tolerance)
+
+            self.pose_length_error = ''
+            self.pose_type_error = ''
+
+            if pose_type == "JOINT":
+                if len(pose) == 6:
+                    self.joints.position = pose
+                    self.robot.go(self.joints, wait = False)
+                    rospy.sleep(1)
+                else:
+                    self.pose_length_error = 'Invalid pose length'
+                    pass
+            elif pose_type == "TCP":
+                if len(pose) == 7:
+                    quat_pose = self.list_to_pose(pose)
+                    self.robot.go(quat_pose, wait = False)
+                    rospy.sleep(1)
+                else:
+                    self.pose_length_error = 'pose is rotvec => urscript movel'
+                    pass
+            else:
+                self.pose_type_error = 'invalid pose_type'
+                pass
     
+
 
     def get_static_joint_pose(self):
         '''
