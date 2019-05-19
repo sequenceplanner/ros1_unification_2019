@@ -68,6 +68,7 @@ class ur_pose_unidriver(transformations):
         rospy.Subscriber("move_group/feedback", mgaf, self.moveitFdbckCallback)
         self.main_publisher = rospy.Publisher("/unification_roscontrol/ur_TARS_pose_unidriver_uni_to_sp", URPoseUniToSP, queue_size=10)
         self.urScriptPublisher = rospy.Publisher("ur_driver/URScript", String, queue_size=10)
+	    #self.photoneoPublisher = rospy.Publisher("sp_to_phoxi_loc", String, queue_size=10)
 
 
         # ROS package localizer:

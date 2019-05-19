@@ -64,6 +64,9 @@ add_message_files(
   SceneUpdaterUniToSP.msg
   PsiObjectPose.msg
   SavedPoses.msg
+  KinectHumans.msg
+  HumanJoints.msg
+  JointPosition.msg
 )
 
 ## Generate services in the 'srv' folder
