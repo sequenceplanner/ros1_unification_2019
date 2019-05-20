@@ -28,7 +28,8 @@ class kinect_human_broadcaster():
         rospy.Subscriber("kinect_humans", KinectHumans, self.kinect_human_callback)
 
         self.br = tf.TransformBroadcaster()
-
+        self.human_list = []
+        self.joint_list = []
         self.x = 0
 
         self.human_id_list = [1, 2, 3, 4, 5, 6]
@@ -59,36 +60,43 @@ class kinect_human_broadcaster():
 			              "HandTipRight",
                           "ThumbRight" ]
 
-        self.rate = rospy.Rate(10)
+        self.rate = rospy.Rate(25)
         self.main()
 
 
     def kinect_human_callback(self, humans):
 
-        if humans.human_list != []:
+        self.human_list = humans.human_list
 
-            for j in range(0, len(humans.human_list)):
-
-                self.human_id = humans.human_list[j].human_id
-                self.joint_list = humans.human_list[j].joint_list
-
-                for i in range(0, len(self.joint_list)):
-
-                    self.br.sendTransform((self.joint_list[i].x, self.joint_list[i].y, self.joint_list[i].z),
-                                           (0, 0, 0, 1),
-                                           rospy.Time.now(),
-                                           str(self.joint_list[i].joint_id) + str(self.human_id),
-                                           "kinect")
-
-        else:
-            pass
-           
 
     def main(self):
+
         while not rospy.is_shutdown():
-            pass
+
+            if self.human_list != []:
+                self.human_list_sample = self.human_list
+
+                for j in range(0, len(self.human_list_sample)):
+
+                    self.human_id = self.human_list_sample[j].human_id
+                    self.joint_list = self.human_list_sample[j].joint_list
+
+                    for i in range(0, len(self.joint_list)):
+                    
+                        print(self.joint_list[i])
+
+                        self.br.sendTransform((self.joint_list[i].x, self.joint_list[i].y, self.joint_list[i].z),
+                                              (0, 0, 0, 1),
+                                              rospy.Time.now(),
+                                              str(self.joint_list[i].joint_id) + str(self.human_id),
+                                              "kinect")
                 
-        self.rate.sleep()
+            #self.rate.sleep()
+
+            else:
+                pass
+                
+            self.rate.sleep()
         rospy.spin()
 
 if __name__ == '__main__':

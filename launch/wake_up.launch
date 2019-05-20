@@ -44,6 +44,8 @@
     </node>
     <node pkg="ros1_unification_2019" name="ur_scene_updater" type="ur_scene_updater.py">  
     </node>
+    <node pkg="ros1_unification_2019" name="kinect_human_broadcaster" type="human_broadcaster.py">  
+    </node>
 
     <!-- For visualization in IPS -->
     <!-- 

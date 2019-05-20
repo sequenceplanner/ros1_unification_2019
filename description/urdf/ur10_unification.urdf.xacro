@@ -361,6 +361,15 @@
       <parent link="${prefix}base_link"/>
       <child link="photoneo"/>
     </joint>
+
+    <link name="kinect">
+    </link>
+
+    <joint name="kinectworld" type="fixed">
+      <origin xyz="-2 0 2" rpy="1.5707 0 1.5707"/>
+      <parent link="${prefix}world"/>
+      <child link="kinect"/>
+    </joint>
   
     
     <!-- Connect tool0_controller to base using floating joint -->
