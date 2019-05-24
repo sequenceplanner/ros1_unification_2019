@@ -51,6 +51,8 @@ find_package(catkin REQUIRED COMPONENTS
 add_message_files(
   FILES
   Common.msg
+  OccupationZone.msg
+  HumansPoseUniToSP.msg
   PoseUpdaterUniToSP.msg
   PoseUpdaterSPToUni.msg
   PoseUpdaterSPToUniRicochet.msg
