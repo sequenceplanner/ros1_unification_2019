@@ -14,15 +14,20 @@ import rospkg
 import time
 import sys
 import os
+import tf
+from std_msgs.msg import String
 from geometry_msgs.msg import PoseStamped
 from moveit_commander import MoveGroupCommander as mgc
 from moveit_commander import PlanningSceneInterface as psi
 from moveit_commander import roscpp_initialize, roscpp_shutdown
 from transformations import transformations 
+from moveit_msgs.msg import ExecuteTrajectoryActionFeedback as etaf
 from ros1_unification_2019.msg import Common
 from ros1_unification_2019.msg import SceneUpdaterSPToUni
 from ros1_unification_2019.msg import SceneUpdaterSPToUniRicochet as Ricochet
 from ros1_unification_2019.msg import SceneUpdaterUniToSP
+from ros1_unification_2019.msg import URPoseUniToSP
+from ros1_unification_2019.msg import PoseUpdaterSPToUni
 
 
 class ur_scene_updater(transformations):
@@ -50,9 +55,15 @@ class ur_scene_updater(transformations):
         # Subscribers and Publishers:
         rospy.Subscriber("/unification_roscontrol/scene_updater_sp_to_uni", SceneUpdaterSPToUni, self.sp_callback)
         self.main_publisher = rospy.Publisher("/unification_roscontrol/scene_updater_uni_to_sp", SceneUpdaterUniToSP, queue_size=10)
+        self.add_lf_box = rospy.Subscriber("plan_to_handover", String, self.handover_callback)
+        self.execute_sub = rospy.Subscriber("/execute_trajectory/feedback", etaf, self.etaf_callback)
+        #self.handover_pose_name_sub = rospy.Subscriber("/unification_roscontrol/ur_TARS_pose_unidriver_uni_to_sp", URPoseUniToSP, self.handover2_callback)
+        self.handover_pose_saver = rospy.Publisher("/unification_roscontrol/ur_pose_updater_sp_to_uni", PoseUpdaterSPToUni, queue_size=10)
 
         # ROS package localizer:
         self.rospack = rospkg.RosPack()
+
+        self.listener4 = tf.TransformListener()
 
         # Stl mesh destinations:
         self.lf_mesh = self.rospack.get_path('ros1_unification_2019') + '/description/cad_meshes/LF.stl'
@@ -71,17 +82,20 @@ class ur_scene_updater(transformations):
         self.iiwa7_robot_name_cases = ['PLEX']
         self.all_robot_names = self.ur10_robot_name_cases + self.iiwa7_robot_name_cases
         self.object_action_cases = ['ADD', 'REMOVE', 'CLEAR', 'ATTACH', 'DETACH']
-        self.object_name_cases = ['LF', 'TSTOOL', 'AGV', 'ENGINE', 'OFTOOL'] # Gradually add more...
+        self.object_name_cases = ['LF', 'TSTOOL', 'AGV', 'ENGINE', 'OFTOOL', 'LFTOOL'] # Gradually add more...
         self.object_file_cases = [self.lf_mesh, self.ts_tool_mesh, self.agv_mesh, self.engine_mesh, self.of_tool_mesh]
 
         # Message freshness definition in seconds:
         self.message_freshness = 3
+
+        #self.handover_pose_name = ''
 
         # Message type initializers:
         self.pose = PoseStamped()
         self.main_msg = SceneUpdaterUniToSP()
         self.common_msg = Common()
         self.ricochet_msg = Ricochet()
+        self.save_handover_psoe = PoseUpdaterSPToUni()
 
         # Initialize timeout and stopwatch
         self.callback_timeout = time.time()
@@ -118,6 +132,8 @@ class ur_scene_updater(transformations):
         # When calling add_pose(...), Endre assumes the 3 first are x-y-z and the last 3 are r-p-y
         #self.engine_pose = [0.0, 0.5, 0.8, 1.5707, 3.1415, 0] #Old pose
         self.engine_pose = [0.046, 0.545, 0.950, -1.56206968, 0.0, -3.12413936] # IPS Calibrated
+
+        
         self.box_of_pose = ["world", 0.15115, -0.661048, 2.4475, 0.484524, 0.515012, -0.484524, 0.515012]
         self.lf_pose = [0.15115, -0.661048, 2.4475, 0.484524, 0.515012, -0.484524, 0.515012]
         #self.of_tool_pose = [0.15115, -0.661048, 2.4475, 0.484524, 0.515012, -0.484524, 0.515012] # Old, wrong rotation.
@@ -125,8 +141,10 @@ class ur_scene_updater(transformations):
 
 
         # Adding collision objects (will be done in a method after getting the pose)
-        #self.scene.add_box("OFTOOLBOX", self.list_to_pose_stamped(self.box_of_pose), size = (0.1, 0.1, 0.25))
+        
+        #self.scene.add_cylinder('LFTOOL', self.lftool_pose, 0.3, 0.1)
         #self.add_object(self.of_tool_mesh, 'OFTOOL', self.of_tool_pose)
+        self.add_object(self.of_tool_mesh, 'OFTOOL', self.of_tool_pose, (1, 1, 1))
         self.add_object(self.of_tool_mesh, 'OFTOOL', self.of_tool_pose, (1, 1, 1))
         self.add_object(self.engine_mesh, 'ENGINE', self.engine_pose, (0.01, 0.01, 0.01))
 
@@ -136,6 +154,46 @@ class ur_scene_updater(transformations):
 
         self.main()
 
+    def etaf_callback(self, data):
+        if data.status.text == "Solution was found and executed.":
+            #if self.handover_pose_name == 'handover':
+            self.save_handover_psoe.action = "UPDATE"
+            self.save_handover_psoe.robot_type = "UR10"
+            self.save_handover_psoe.robot_name = "TARS"
+            self.save_handover_psoe.pose_name = "handover"
+            self.handover_pose_saver.publish(self.save_handover_psoe)
+            #print("PRINTING")
+
+
+    # rotate vector v1 by quaternion q1 
+    def qv_mult(self, q1, v1):
+        #v1 = tf.transformations.unit_vector(v1)
+        q2 = list(v1)
+        q2.append(0.0)
+        return tf.transformations.quaternion_multiply(
+            tf.transformations.quaternion_multiply(q1, q2), 
+            tf.transformations.quaternion_conjugate(q1)
+        )[:3]
+
+    #superhack
+    def handover_callback(self, data):
+        if data.data == "OFTOOLBOX":
+            
+            try:
+                
+                (trans, rot) = self.listener4.lookupTransform('/base', '/tool0', rospy.Time(0))
+
+                t = self.qv_mult(rot, [0, 0, 0.15])
+                print(t)
+                self.lftool_pose = ["base", trans[0] + t[0], trans[1] + t[1], trans[2] + t[2], rot[0], rot[1], rot[2], rot[3]]
+                self.scene.add_box("OFTOOLBOX", self.list_to_pose_stamped(self.lftool_pose), size = (0.1, 0.1, 0.25))
+
+            except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException): 
+                print("failied to fetch tf")
+            
+            
+
+            
 
     def list_to_pose_stamped(self, list):
         '''

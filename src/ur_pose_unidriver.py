@@ -32,6 +32,7 @@ from ros1_unification_2019.msg import Common
 from ros1_unification_2019.msg import URPoseSPToUni
 from ros1_unification_2019.msg import URPoseSPToUniRicochet as Ricochet
 from ros1_unification_2019.msg import URPoseUniToSP
+from ros1_unification_2019.msg import PoseUpdaterSPToUni
 
 #HOST = "192.168.10.16"
 #HOST = "0.0.0.0"
@@ -207,7 +208,11 @@ class ur_pose_unidriver(transformations):
         the main publisher topic.
         '''
 
+        self.threaded_tf_lookup_movel()
+
         while not rospy.is_shutdown():
+
+
 
             # Check message freshness:
             if time.time() < self.callback_timeout:
@@ -363,6 +368,8 @@ class ur_pose_unidriver(transformations):
         Currently only for joint poses.
         Using the URScript API, move to a position with a linear in joint-space move.
         '''
+
+
         joint_pose = []
         joint_pose = self.find_pose(name, input_f)
 
@@ -381,26 +388,21 @@ class ur_pose_unidriver(transformations):
         Using the URScript API, move to a position with a linear in tool-space move.
         '''
 
-        if 'TF' in name:
-            self.threaded_tf_lookup_movel()
-        
-        else:
+        quat_pose = []
+        tcp_pose = []
+        quat_pose = self.find_pose(name, input_f)
 
-            quat_pose = []
-            tcp_pose = []
-            quat_pose = self.find_pose(name, input_f)
-
-            if quat_pose != []:
-                if len(quat_pose) == 7:
-                    self.pose_length_error = 'pose is quat => planning'
-                elif len(quat_pose) == 6:
-                    self.pose_length_error = ''
-                    script_str = "movel(p" + str(quat_pose) + ", a=" + str(a) + ", v=" + str(v) + ", t=" + str(0) + ")"
-                    self.urScriptPublisher.publish(script_str)
-                else:
-                    self.pose_length_error = 'invalid tcp pose length'
+        if quat_pose != []:
+            if len(quat_pose) == 7:
+                self.pose_length_error = 'pose is quat => planning'
+            elif len(quat_pose) == 6:
+                self.pose_length_error = ''
+                script_str = "movel(p" + str(quat_pose) + ", a=" + str(a) + ", v=" + str(v) + ", t=" + str(0) + ")"
+                self.urScriptPublisher.publish(script_str)
             else:
-                self.pose_name_error = 'pose with the name ' + name + ' not saved'
+                self.pose_length_error = 'invalid tcp pose length'
+        else:
+            self.pose_name_error = 'pose with the name ' + name + ' not saved'
 
 
     def threaded_tf_lookup_movel(self):
@@ -413,27 +415,28 @@ class ur_pose_unidriver(transformations):
             while not rospy.is_shutdown():
                 try:
                 
-                    (trans, rot) = listener.lookupTransform('/base', '/ladderframe', rospy.Time(0))
+                    (trans, rot) = listener.lookupTransform('/world', '/ee_link', rospy.Time(0))
+                    #print(trans, rot)
                     
-                    if type(trans) == list and type(rot) == list and unset == False:
-
-                        #self.robot.set_max_velocity_scaling_factor(self.speed_scaling)
-                        #self.robot.set_max_acceleration_scaling_factor(self.acc_scaling)
-                        #self.robot.set_goal_tolerance(self.goal_tolerance)
-
-                        quaternion = (rot[0], rot[1], rot[2], rot[3])
-                        euler_pose = tf.transformations.euler_from_quaternion(quaternion)
-                        euler_list = [trans[0], trans[1], trans[2], euler_pose[0], euler_pose[1], euler_pose[2]]
-
-                        print(euler_pose)
-
-                        script_str = "movel(p" + str(euler_list) + ", a=" + str(self.acc_scaling) + ", v=" + str(self.speed_scaling) + ", t=" + str(0) + ")"
-                        self.urScriptPublisher.publish(script_str)
-                        rospy.sleep(1)
-                        unset = True
-                       
-                    else:
-                        pass
+                    # if type(trans) == list and type(rot) == list and unset == False:
+# 
+                    #    ? self.robot.set_max_velocity_scaling_factor(self.speed_scaling)
+                    #  self.robot.set_max_acceleration_scaling_factor(self.acc_scaling)
+                        # self.robot.set_goal_tolerance(self.goal_tolerance)
+# 
+                        # quaternion = (rot[0], rot[1], rot[2], rot[3])
+                        # euler_pose = tf.transformations.euler_from_quaternion(quaternion)
+                        # euler_list = [trans[0], trans[1], trans[2], euler_pose[0], euler_pose[1], euler_pose[2]]
+# 
+                        # print(euler_pose)
+# 
+                        # script_str = "movel(p" + str(euler_list) + ", a=" + str(self.acc_scaling) + ", v=" + str(self.speed_scaling) + ", t=" + str(0) + ")"
+                        # self.urScriptPublisher.publish(script_str)
+                        # rospy.sleep(1)
+                        # unset = True
+                    #    
+                    # else:
+                        # pass
 
                 except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException): 
                     continue
@@ -443,6 +446,7 @@ class ur_pose_unidriver(transformations):
         t.start()
 
 
+
     def threaded_tf_lookup(self):
         def threaded_tf_lookup_callback():
 
@@ -450,41 +454,56 @@ class ur_pose_unidriver(transformations):
             unset = False
             trans = []
             rot = []
-            while not rospy.is_shutdown():
-                try:
-                
-                    (trans, rot) = listener.lookupTransform('/base_link', '/ladderframe', rospy.Time(0))
+            while not rospy.is_shutdown() and not unset:
+                for i in [0, 1, 2, 3, 4, 5]:
+                    try:
                     
-                    if type(trans) == list and type(rot) == list and unset == False:
-                        pose_app = [trans[0], trans[1], trans[2], rot[0], rot[1], rot[2], rot[3]]
+                        (trans, rot) = listener.lookupTransform('/world', '/HandRight' + str(i), rospy.Time(0))
 
-                        self.robot.set_max_velocity_scaling_factor(self.speed_scaling)
-                        self.robot.set_max_acceleration_scaling_factor(self.acc_scaling)
-                        self.robot.set_goal_tolerance(self.goal_tolerance)
+                        if type(trans) == list and type(rot) == list and unset == False:
+                            pose_app = [trans[0], trans[1], trans[2], 0.31393227071831764, 0.31763498116667394, -0.6335004244729144, -0.6318478933521307]
+                            print(pose_app)
+                            self.robot.set_max_velocity_scaling_factor(self.speed_scaling)
+                            self.robot.set_max_acceleration_scaling_factor(self.acc_scaling)
+                            self.robot.set_goal_tolerance(self.goal_tolerance)
 
-                        quat_pose = self.list_to_pose(pose_app)
-                        print(quat_pose)
-                        self.robot.go(quat_pose, wait = False)
-                        rospy.sleep(1)
-                        unset = True
-                       
-                    else:
-                        pass
-# 
-                except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException): 
-                    continue
+                            quat_pose = self.list_to_pose(pose_app)
+                            #print(quat_pose)
+                            print("MOVING TO POSE")
+                            ret = self.robot.go(quat_pose, wait = True)
+                            print("MOVE COMPLETED: ")
+                            print(ret)
+                            if(ret):
+                                handover_pose_saver = rospy.Publisher("/unification_roscontrol/ur_pose_updater_sp_to_uni", PoseUpdaterSPToUni, queue_size=10)
+                                save_handover_psoe = PoseUpdaterSPToUni()
+                                save_handover_psoe.action = "UPDATE"
+                                save_handover_psoe.robot_type = "UR10"
+                                save_handover_psoe.robot_name = "TARS"
+                                save_handover_psoe.pose_name = "handover"
+                                handover_pose_saver.publish(save_handover_psoe)
+                            
+                            unset = True
+
+                            break
+
+                        else:
+                            pass
+#   
+                    except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException): 
+                        continue
 
         t = threading.Thread(target=threaded_tf_lookup_callback)
         t.daemon = True
         t.start()
+
     
     def planned_move(self, input_f, name, pose_type, a, v):
         '''
         Using the movegroup_commander class from MoveIt, plan and execute a trajectory to a joint or a tcp pose
         '''
 
-        if 'TF' in name:
-            self.threaded_tf_lookup()                
+        if name == 'handover':
+            self.threaded_tf_lookup()              
 
         else:
             pose = self.find_pose(name, input_f)
@@ -526,7 +545,6 @@ class ur_pose_unidriver(transformations):
         moveit_commander according to KCacheGrind.
         '''
 
-        # Very slow: current_pose = self.robot.get_current_joint_values()
         actual_joint_pose = ""
         current_pose = self.joint_pose
 
@@ -876,7 +894,7 @@ class ur_pose_unidriver(transformations):
 
 
         if len(joint.velocity) != 0:
-            if all(joint.velocity[i] == 0 for i in range(0, 5, 1)):
+            if all(abs(joint.velocity[i]) < 0.01 for i in range(0, 5, 1)):
                 self.moving = False
             else:
                 self.moving = True
