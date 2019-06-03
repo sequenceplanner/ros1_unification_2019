@@ -69,6 +69,7 @@ add_message_files(
   KinectHumans.msg
   HumanJoints.msg
   JointPosition.msg
+  RecuSPToUni.msg
 )
 
 ## Generate services in the 'srv' folder

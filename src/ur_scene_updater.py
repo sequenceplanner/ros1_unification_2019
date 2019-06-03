@@ -190,6 +190,15 @@ class ur_scene_updater(transformations):
 
             except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException): 
                 print("failied to fetch tf")
+        
+        elif data.data == "POPULATE":
+            self.scene.add_box("NOGO1", self.list_to_pose_stamped(["world", 0.5, 0, 1.5, 0, 0, 0, 1]), size = (0.8, 5, 3))
+            self.scene.add_box("NOGO2", self.list_to_pose_stamped(["world", -0.5, -2, 0.5, 0, 0, 0, 1]), size = (3, 2, 1))
+            self.scene.add_box("NOGO3", self.list_to_pose_stamped(["world", 0, -1, 2.4, 0, 0, 0, 1]), size = (3, 0.23, 0.23))
+
+        
+        else:
+            pass
             
             
 

@@ -16,6 +16,7 @@ import ast
 import sys
 import time
 import csv
+import os
 import tf
 import struct
 import socket
@@ -69,6 +70,8 @@ class ur_pose_unidriver(transformations):
         rospy.Subscriber("move_group/feedback", mgaf, self.moveitFdbckCallback)
         self.main_publisher = rospy.Publisher("/unification_roscontrol/ur_TARS_pose_unidriver_uni_to_sp", URPoseUniToSP, queue_size=10)
         self.urScriptPublisher = rospy.Publisher("ur_driver/URScript", String, queue_size=10)
+        rospy.Subscriber("unification_roscontrol/gestures_uni_to_sp", String, self.gesture_callback)
+        self.gesture_ack = rospy.Publisher("/unification_roscontrol/gestures_sp_to_uni", String, queue_size=10)
 	    #self.photoneoPublisher = rospy.Publisher("sp_to_phoxi_loc", String, queue_size=10)
 
 
@@ -172,6 +175,9 @@ class ur_pose_unidriver(transformations):
         self.prev_acc_scaling = 0.0
         self.prev_goal_tolerance = 0.0
 
+        self.once3 = True
+        self.once4 = True
+
         # Robot joint identifiers:
         self.joints.name = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint', \
                             'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
@@ -202,13 +208,37 @@ class ur_pose_unidriver(transformations):
             self.main_publisher.publish(self.main_msg)
 
 
+    def run_picknplace(self):
+        def callback_run_picknplace():
+            os.system('rosrun ros1_unification_2019 picknplace.py')
+        t1 = threading.Thread(target=callback_run_picknplace)
+        t1.daemon = True
+        t1.start()
+
+    def gesture_callback(self, data):
+        if data.data == "COMMAND3" and self.once3 == True:
+            time.sleep(4)
+            self.movej(self.file_joint_input, "AfterLFOperationJOINTPose", 0.1, 0.1)
+            self.once3 = False
+        elif data.data == "COMMAND4" and self.once4 == True:
+            time.sleep(5)
+            self.gesture_ack.publish("CLEAR")
+            self.planned_move(self.file_joint_input, "handover", "JOINT", 0.1, 0.1)
+            self.once4 = False
+        elif data.data == "COMMAND9":
+            self.once3 = True
+            self.once4 = True
+            self.gesture_ack.publish("CLEAR")
+        else:
+            pass
+
     def main(self):
         '''
         This method spins until an interrupt exception is raised. The state message is generated here and published to 
         the main publisher topic.
         '''
 
-        self.threaded_tf_lookup_movel()
+        #self.threaded_tf_lookup_movel()
 
         while not rospy.is_shutdown():
 
@@ -461,11 +491,11 @@ class ur_pose_unidriver(transformations):
                         (trans, rot) = listener.lookupTransform('/world', '/HandRight' + str(i), rospy.Time(0))
 
                         if type(trans) == list and type(rot) == list and unset == False:
-                            pose_app = [trans[0], trans[1], trans[2], 0.31393227071831764, 0.31763498116667394, -0.6335004244729144, -0.6318478933521307]
+                            pose_app = [trans[0], trans[1] - 0.3, trans[2], 0.31393227071831764, 0.31763498116667394, -0.6335004244729144, -0.6318478933521307]
                             print(pose_app)
-                            self.robot.set_max_velocity_scaling_factor(self.speed_scaling)
-                            self.robot.set_max_acceleration_scaling_factor(self.acc_scaling)
-                            self.robot.set_goal_tolerance(self.goal_tolerance)
+                            self.robot.set_max_velocity_scaling_factor(0.1) # terrible hacks
+                            self.robot.set_max_acceleration_scaling_factor(0.1)
+                            self.robot.set_goal_tolerance(0.01)
 
                             quat_pose = self.list_to_pose(pose_app)
                             #print(quat_pose)
@@ -503,7 +533,10 @@ class ur_pose_unidriver(transformations):
         '''
 
         if name == 'handover':
-            self.threaded_tf_lookup()              
+            self.threaded_tf_lookup()
+
+        elif name == "LFOperation":
+            self.run_picknplace()           
 
         else:
             pose = self.find_pose(name, input_f)
