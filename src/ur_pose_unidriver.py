@@ -218,7 +218,9 @@ class ur_pose_unidriver(transformations):
     def gesture_callback(self, data):
         if data.data == "COMMAND3" and self.once3 == True:
             time.sleep(4)
-            self.movej(self.file_joint_input, "AfterLFOperationJOINTPose", 0.1, 0.1)
+            self.movej(self.file_joint_input, "AfterLFOperationJOINTPose", 0.3, 0.3)
+            time.sleep(0.5)
+            self.movej(self.file_joint_input, "AfterLFOperationJOINTPose", 0.3, 0.3)
             self.once3 = False
         elif data.data == "COMMAND4" and self.once4 == True:
             time.sleep(5)
@@ -504,6 +506,7 @@ class ur_pose_unidriver(transformations):
                             print("MOVE COMPLETED: ")
                             print(ret)
                             if(ret):
+                                time.sleep(2)
                                 handover_pose_saver = rospy.Publisher("/unification_roscontrol/ur_pose_updater_sp_to_uni", PoseUpdaterSPToUni, queue_size=10)
                                 save_handover_psoe = PoseUpdaterSPToUni()
                                 save_handover_psoe.action = "UPDATE"

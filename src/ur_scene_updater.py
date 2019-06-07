@@ -56,7 +56,7 @@ class ur_scene_updater(transformations):
         rospy.Subscriber("/unification_roscontrol/scene_updater_sp_to_uni", SceneUpdaterSPToUni, self.sp_callback)
         self.main_publisher = rospy.Publisher("/unification_roscontrol/scene_updater_uni_to_sp", SceneUpdaterUniToSP, queue_size=10)
         self.add_lf_box = rospy.Subscriber("plan_to_handover", String, self.handover_callback)
-        self.execute_sub = rospy.Subscriber("/execute_trajectory/feedback", etaf, self.etaf_callback)
+        #self.execute_sub = rospy.Subscriber("/execute_trajectory/feedback", etaf, self.etaf_callback)
         #self.handover_pose_name_sub = rospy.Subscriber("/unification_roscontrol/ur_TARS_pose_unidriver_uni_to_sp", URPoseUniToSP, self.handover2_callback)
         self.handover_pose_saver = rospy.Publisher("/unification_roscontrol/ur_pose_updater_sp_to_uni", PoseUpdaterSPToUni, queue_size=10)
 
@@ -154,15 +154,15 @@ class ur_scene_updater(transformations):
 
         self.main()
 
-    def etaf_callback(self, data):
-        if data.status.text == "Solution was found and executed.":
-            #if self.handover_pose_name == 'handover':
-            self.save_handover_psoe.action = "UPDATE"
-            self.save_handover_psoe.robot_type = "UR10"
-            self.save_handover_psoe.robot_name = "TARS"
-            self.save_handover_psoe.pose_name = "handover"
-            self.handover_pose_saver.publish(self.save_handover_psoe)
-            #print("PRINTING")
+    # def etaf_callback(self, data):
+        # if data.status.text == "Solution was found and executed.":
+           # if self.handover_pose_name == 'handover':
+            # self.save_handover_psoe.action = "UPDATE"
+            # self.save_handover_psoe.robot_type = "UR10"
+            # self.save_handover_psoe.robot_name = "TARS"
+            # self.save_handover_psoe.pose_name = "handover"
+            # self.handover_pose_saver.publish(self.save_handover_psoe)
+           # print("PRINTING")
 
 
     # rotate vector v1 by quaternion q1 
@@ -187,6 +187,7 @@ class ur_scene_updater(transformations):
                 print(t)
                 self.lftool_pose = ["base", trans[0] + t[0], trans[1] + t[1], trans[2] + t[2], rot[0], rot[1], rot[2], rot[3]]
                 self.scene.add_box("OFTOOLBOX", self.list_to_pose_stamped(self.lftool_pose), size = (0.1, 0.1, 0.25))
+                self.attach_object("OFTOOLBOX", "ee_link")
 
             except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException): 
                 print("failied to fetch tf")
